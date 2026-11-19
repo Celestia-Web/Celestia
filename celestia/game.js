@@ -58,7 +58,7 @@ function render() {
 
 function renderName(el) {
   el.innerHTML = `<div class="center"><h1>CELESTIA</h1>
-    <img src="assets/ship.gif" style="width:184px;height:112px;border:2px solid #fff">
+    <img src="${IMG.ship}" style="width:184px;height:112px;border:2px solid #fff">
     <div>NAME YOUR SHIP</div>
     <input id="nm" maxlength="24" value="${randName()}">
     <div style="display:flex;gap:12px"><button class="btn" id="rn">RANDOMIZE</button><button class="btn" id="go">LAUNCH</button></div></div>`;
@@ -89,7 +89,7 @@ function renderPlanet(el) {
     if (S.step === 4) acts += `<button class="btn" id="tf">TRAVEL TO FARPORT</button>`;
     if (S.step >= 7) acts += `<button class="btn" id="map">OPEN MAP</button>`;
   }
-  el.innerHTML = `<img class="bg" src="assets/arrival-${L}.png" onerror="this.onerror=null;this.src='assets/${L}.png'">
+  el.innerHTML = `<img class="bg" src="${IMG[L]}">
     ${hud()}${mid}
     <div class="box" style="position:absolute;left:12px;top:46px;z-index:5">${P.name}<br><span style="font-size:8px">${P.sub}</span></div>
     <div class="actions">${acts}</div>`;
@@ -139,10 +139,9 @@ function renderHut(el) {
 const stars = Array.from({ length: 90 }, () => ({ x: Math.random() * 920, y: Math.random() * 560, s: 0.3 + Math.random() }));
 function startTravel(to) { S.travel = { to, t: 0 }; S.view = 'travel'; render(); }
 function renderTravel(el) {
-  // Drop your own animations into assets/travel-warp.gif and assets/travel-remaining.png (92x56 art, any size works)
+  // To use your own art, replace the values in assets.js (any image URL or data URI)
   el.innerHTML = `<canvas id="tc" width="920" height="560" style="position:absolute;inset:0"></canvas>
-    <img id="warp" class="bg" src="assets/travel-warp.gif" onerror="this.onerror=null;this.src='assets/ship.gif'">
-    <img id="rem" class="bg" src="assets/travel-remaining.png" style="display:none" onerror="this.remove()">
+    <img id="warp" class="bg" src="${IMG.ship}">
     <div class="tbar" id="tt"></div>`;
 }
 function tickTravel(dt) {

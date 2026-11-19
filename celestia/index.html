@@ -15,9 +15,10 @@
   <canvas id="fx" width="920" height="560"></canvas>
 </div>
 <script>
-function bootFail(f){document.getElementById('boot')&&(document.getElementById('boot').innerHTML='ERROR: COULD NOT LOAD '+f+'<br>UPLOAD ALL FILES TO THE REPO ROOT: index.html, style.css, data.js, game.js, assets/');}
+function bootFail(f){document.getElementById('boot')&&(document.getElementById('boot').innerHTML='ERROR: COULD NOT LOAD '+f+'<br>UPLOAD ALL FILES TO THE REPO ROOT: index.html, style.css, assets.js, data.js, game.js');}
 window.addEventListener('error',function(e){if(e.target&&e.target.src)bootFail(e.target.src.split('/').pop());},true);
 </script>
+<script src="assets.js"></script>
 <script src="data.js"></script>
 <script src="game.js"></script>
 </body>
