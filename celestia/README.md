@@ -7,7 +7,7 @@ A black-and-white pixel space game. Plain HTML/CSS/JS, no build step.
 - GitHub Pages: push this folder to a repo, then Settings > Pages > Deploy from branch > `main` / root.
 
 ## Notes
-- Playable only in a tab at an 11.5 wide : 7 tall ratio (6% tolerance). The game pauses if the tab is hidden.
+- Works at any tab size (the game scales to fit). It pauses if the tab is hidden.
 - Font: Press Start 2P (loaded from Google Fonts).
 - Mining speed = miner rate / toughness = 0.5 / 0.3 = 1.667 per second. Change it in `js/data.js` (`TUNING`).
 - Art in `assets/`:

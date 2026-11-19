@@ -8,9 +8,7 @@ const TUNING = {
   need: 50,            // lunarrite required
   reward: 5000,        // Zeals
   warpSeconds: 2,      // travel animation length
-  travelSeconds: 5,    // Port <-> Lear = 5 kilayears = 5 seconds
-  targetRatio: 11.5 / 7, // width : height
-  ratioTolerance: 0.06
+  travelSeconds: 5     // Port <-> Lear = 5 kilayears = 5 seconds
 };
 // mining speed = miner rate / toughness  (0.5 / 0.3 = 1.667 per second)
 TUNING.mineRate = TUNING.minerRate / TUNING.toughness;

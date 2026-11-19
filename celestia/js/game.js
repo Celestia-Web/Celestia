@@ -11,17 +11,14 @@ let playable = false, last = performance.now();
 const rnd = a => a[Math.floor(Math.random() * a.length)];
 const randName = () => rnd(FIRST_NAMES) + ' ' + rnd(LAST_NAMES);
 
-/* ---------- ratio / tab guard ---------- */
+/* ---------- tab pause / scaling ---------- */
 function checkPlay() {
-  const w = innerWidth, h = innerHeight, r = w / h;
-  const ratioOk = Math.abs(r - T.targetRatio) / T.targetRatio <= T.ratioTolerance;
-  playable = ratioOk && !document.hidden;
+  const w = innerWidth, h = innerHeight;
+  playable = !document.hidden;
   const g = $('#guard');
   g.hidden = playable;
-  if (!playable) {
-    g.innerHTML = document.hidden ? 'PAUSED<br>RETURN TO THIS TAB' :
-      `CELESTIA<br><br>RESIZE THIS TAB TO A<br>11.5 WIDE : 7 TALL RATIO<br><br>NOW: ${r.toFixed(2)} (NEED ${T.targetRatio.toFixed(2)})`;
-  }
+  if (!playable) g.innerHTML = 'PAUSED<br>RETURN TO THIS TAB';
+  // stage keeps its 11.5:7 layout and scales to fit any tab size
   const s = Math.min(w / 920, h / 560);
   $('#stage').style.transform = `translate(-50%,-50%) scale(${s})`;
 }
