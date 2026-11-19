@@ -10,11 +10,15 @@
 <body>
 <div id="guard" hidden></div>
 <div id="stage">
-  <div id="screen"></div>
+  <div id="screen"><div id="boot" style="padding:24px;line-height:2">LOADING CELESTIA...</div></div>
   <div id="popup" hidden></div>
   <canvas id="fx" width="920" height="560"></canvas>
 </div>
-<script src="js/data.js"></script>
-<script src="js/game.js"></script>
+<script>
+function bootFail(f){document.getElementById('boot')&&(document.getElementById('boot').innerHTML='ERROR: COULD NOT LOAD '+f+'<br>UPLOAD ALL FILES TO THE REPO ROOT: index.html, style.css, data.js, game.js, assets/');}
+window.addEventListener('error',function(e){if(e.target&&e.target.src)bootFail(e.target.src.split('/').pop());},true);
+</script>
+<script src="data.js"></script>
+<script src="game.js"></script>
 </body>
 </html>
