@@ -1,0 +1,1704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Celestia</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; image-rendering: pixelated; }
+html, body { margin: 0; height: 100%; background: #000; color: #fff; overflow: hidden;
+  font-family: 'Press Start 2P', monospace; font-size: 10px; line-height: 1.6; }
+/* Stage is 11.5 : 7 -> 920 x 560, scaled by JS to fit the tab */
+#stage { position: absolute; left: 50%; top: 50%; width: 920px; height: 560px;
+  transform-origin: center; background: #000; overflow: hidden; }
+#screen { position: absolute; inset: 0; }
+#fx { position: absolute; inset: 0; pointer-events: none; z-index: 30; }
+.bg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hud { position: absolute; top: 0; left: 0; right: 0; height: 34px; display: flex;
+  justify-content: space-between; align-items: center; padding: 0 12px; background: #000;
+  border-bottom: 2px solid #fff; z-index: 5; }
+.actions { position: absolute; left: 0; right: 0; bottom: 14px; display: flex; gap: 12px;
+  justify-content: center; z-index: 5; }
+.btn { background: #000; color: #fff; border: 2px solid #fff; font: inherit; font-size: 10px;
+  padding: 10px 14px; cursor: pointer; }
+.btn:hover:not(:disabled) { background: #fff; color: #000; }
+.btn:disabled { border-color: #555; color: #555; cursor: default; }
+.box { background: #000; border: 2px solid #fff; padding: 14px; }
+.center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 16px; text-align: center; }
+h1 { font-size: 36px; margin: 0; letter-spacing: 6px; }
+input { background: #000; color: #fff; border: 2px solid #fff; font: inherit; font-size: 12px;
+  padding: 10px; width: 330px; text-align: center; outline: none; }
+#popup { position: absolute; left: 90px; right: 90px; bottom: 70px; z-index: 20; background: #000;
+  border: 2px solid #fff; padding: 16px; display: flex; flex-direction: column; gap: 14px;
+  align-items: flex-end; box-shadow: 0 0 0 4px #000; }
+#popup .pt { width: 100%; line-height: 1.9; }
+#popup[hidden], #guard[hidden] { display: none; }
+#guard { position: fixed; inset: 0; z-index: 99; background: #000; color: #fff; display: flex;
+  align-items: center; justify-content: center; text-align: center; padding: 24px; line-height: 2.2; }
+.bar { width: 320px; height: 16px; border: 2px solid #fff; }
+.bar > div { height: 100%; width: 0; background: #fff; }
+.mid { position: absolute; left: 0; right: 0; top: 250px; display: flex; flex-direction: column;
+  align-items: center; gap: 12px; z-index: 5; }
+.panel { position: absolute; right: 12px; top: 46px; width: 250px; z-index: 6; display: flex;
+  flex-direction: column; gap: 10px; }
+.banner { position: absolute; left: 0; right: 0; bottom: 12px; text-align: center; z-index: 5; letter-spacing: 3px; }
+canvas.map { position: absolute; inset: 0; cursor: grab; }
+canvas.map:active { cursor: grabbing; }
+.tbar { position: absolute; left: 0; right: 0; bottom: 20px; text-align: center; z-index: 5;
+  background: #000; border-top: 2px solid #fff; border-bottom: 2px solid #fff; padding: 10px; }
+
+/* ===== 1.1: Ubuntu UI, nicer look. Only animations/sprites stay pixelated ===== */
+html, body, input, .btn { font-family: 'Ubuntu', system-ui, sans-serif; }
+html, body { font-size: 15px; line-height: 1.5; }
+.hud { height: 38px; font-weight: 500; background: linear-gradient(#000, #0a0a0a); letter-spacing: .5px; }
+.btn { font-size: 14px; font-weight: 700; letter-spacing: 1px; padding: 10px 20px; border-radius: 8px;
+  background: linear-gradient(#1c1c1c, #000); transition: transform .1s, background .15s, color .15s; }
+.btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(255,255,255,.35); }
+.box { border-radius: 10px; background: rgba(0,0,0,.82); box-shadow: 0 6px 22px rgba(0,0,0,.7); }
+input { font-size: 16px; border-radius: 8px; }
+h1 { font-size: 58px; font-weight: 700; letter-spacing: 14px; margin: 0; text-shadow: 0 0 22px rgba(255,255,255,.5); }
+#popup { font-size: 16px; border-radius: 12px; background: rgba(0,0,0,.92); box-shadow: 0 8px 40px rgba(0,0,0,.9), 0 0 0 1px #444; }
+#guard { font-size: 20px; }
+.bar { border-radius: 8px; overflow: hidden; height: 18px; } .sm { font-size: 12px; opacity: .8; }
+.tl { position: absolute; left: 12px; top: 48px; z-index: 5; }
+.sub { letter-spacing: 4px; opacity: .8; }
+.row { display: flex; gap: 12px; }
+.ships { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; width: 880px; }
+.sc { border: 2px solid #444; border-radius: 10px; padding: 6px 4px; cursor: pointer; background: #050505; font-size: 10px; font-weight: 700; transition: .12s; }
+.sc:hover { border-color: #aaa; } .sc.on { border-color: #fff; background: #1a1a1a; box-shadow: 0 0 16px rgba(255,255,255,.4); transform: translateY(-3px); }
+.sc canvas { width: 104px; height: 56px; display: block; margin: 0 auto 4px; }
+.sd { min-height: 40px; width: 700px; opacity: .9; }
+.moss { position: absolute; width: 72px; height: 54px; cursor: grab; z-index: 6; touch-action: none; user-select: none; }
+.shop { position: absolute; left: 12px; top: 110px; width: 430px; z-index: 5; display: flex; flex-direction: column; gap: 8px; }
+.shop .ln { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.shop .btn { padding: 6px 12px; font-size: 12px; }
+.toast { position: absolute; right: 14px; top: 50px; z-index: 40; background: #fff; color: #000; padding: 6px 12px; border-radius: 8px; font-weight: 700; animation: fl 2.4s forwards; }
+@keyframes fl { to { transform: translateY(-22px); opacity: 0; } }
+.hp { position: absolute; right: 12px; top: 48px; width: 270px; z-index: 5; }
+
+/* ===== 1.2 ===== */
+.sc canvas { width: 128px; height: 64px; }
+.row { flex-wrap: wrap; justify-content: center; max-width: 880px; }
+.shop2 { position: absolute; right: 12px; top: 110px; width: 400px; z-index: 5; display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow: auto; }
+.sw { width: 26px; height: 26px; border: 2px solid #fff; border-radius: 6px; cursor: pointer; padding: 0; }
+.sw.on { outline: 2px solid #fff; outline-offset: 2px; }
+#mute { position: absolute; left: 10px; bottom: 10px; z-index: 25; padding: 6px 10px; font-size: 11px; }
+.bg { animation: landz .9s ease-out; }
+@keyframes landz { from { transform: scale(1.35); opacity: .2; } to { transform: scale(1); opacity: 1; } }
+.shop, .shop2 { top: 148px; }
+.shop2 { max-height: 390px; }
+
+/* ===== 1.3 ===== */
+.hud { height: 46px; padding: 0 12px; }
+.hl { display: flex; flex-direction: column; line-height: 1.15; min-width: 190px; } .hs { font-size: 17px; letter-spacing: 1px; }
+.hc { text-align: center; line-height: 1.2; flex: 1; } .hc b { font-size: 14px; letter-spacing: 1px; }
+.hr { display: flex; gap: 14px; font-size: 13px; font-weight: 500; min-width: 330px; justify-content: flex-end; } #hz { font-weight: 700; }
+.fz { position: absolute; right: 18px; top: 52px; z-index: 40; font-weight: 700; font-size: 20px; color: #fff; text-shadow: 0 0 10px #fff; animation: fl 1.5s forwards; }
+.btn.pri { background: #fff; color: #000; } .btn.pri:hover:not(:disabled) { background: #dcdcdc; }
+.btn.sec { background: transparent; } .btn.dng { border-color: #9a5a5a; color: #d9a0a0; background: #140808; } .btn.dng:hover:not(:disabled) { background: #5a1f1f; color: #fff; }
+.btn:active:not(:disabled) { transform: scale(.95); } .btn:focus-visible, .card:focus-visible, .sw:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+#popup { left: 150px; right: 150px; padding: 12px 16px; font-size: 14px; gap: 10px; } #popup:not([hidden]) { animation: pin .18s ease-out; } #popup.out { opacity: 0; transition: opacity .17s; }
+@keyframes pin { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+#popup .row { justify-content: flex-end; gap: 8px; }
+.tw { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+.mega { font-size: 104px; letter-spacing: 26px; line-height: 1; text-shadow: 0 0 40px rgba(255,255,255,.55), 0 4px 0 #444; margin: 0 0 0 26px; }
+.car { width: 880px; height: 300px; overflow: hidden; position: relative; cursor: grab; touch-action: pan-y; } .car:active { cursor: grabbing; }
+.trk { display: flex; gap: 20px; position: absolute; left: 0; top: 0; will-change: transform; }
+.card { width: 300px; height: 292px; border: 2px solid #3a3a3a; border-radius: 12px; background: rgba(8,8,8,.85); padding: 8px; display: flex; flex-direction: column; align-items: center; gap: 4px; flex: none; transition: transform .2s, border-color .2s, box-shadow .2s; }
+.card.on { border-color: #fff; box-shadow: 0 0 28px rgba(255,255,255,.35); transform: scale(1.03); }
+.card.on .cv canvas { animation: bob 2.4s ease-in-out infinite; } @keyframes bob { 50% { transform: translateY(-6px); } }
+.cv canvas { width: 270px; height: 135px; display: block; pointer-events: none; } .tag { font-size: 10px; letter-spacing: 2px; opacity: .75; }
+.chips { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; } .chip { font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 4px; background: #1a1a1a; }
+.chip.g { color: #8ae89a; } .chip.b { color: #f09a9a; } .chip.n { color: #aaa; } .dsc { font-size: 10px; opacity: .7; text-align: center; line-height: 1.3; flex: 1; }
+.slw { position: relative; width: 600px; height: 26px; touch-action: none; cursor: pointer; } .slt { position: absolute; top: 11px; left: 0; right: 0; height: 4px; background: #666; border-radius: 2px; }
+.slh { position: absolute; top: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 0 12px #fff; } .tick { position: absolute; top: 6px; width: 2px; height: 14px; background: #999; }
+.npc { position: absolute; z-index: 6; display: flex; gap: 12px; align-items: flex-start; } .npc img { width: 112px; height: 112px; border: 2px solid #fff; border-radius: 10px; background: #000; }
+.npc .sp { background: rgba(0,0,0,.85); border: 2px solid #fff; border-radius: 10px; padding: 10px 14px; max-width: 640px; line-height: 1.5; font-size: 14px; }
+.npc.big { left: 14px; top: 54px; } .npc.solo { left: 14px; top: 160px; } .npc.solo img { width: 100px; height: 100px; } .npc.shopnpc { left: 14px; bottom: 62px; align-items: flex-end; } .npc.shopnpc img { width: 84px; height: 84px; } .npc.shopnpc .sp { max-width: 320px; font-size: 12px; }
+.jb { position: absolute; left: 14px; right: 14px; top: 184px; bottom: 74px; z-index: 5; overflow: auto; display: flex; flex-direction: column; gap: 5px; font-size: 13px; } .jb .btn { padding: 4px 10px; font-size: 11px; }
+.shop2 { max-height: 250px; } #mbtn { position: absolute; left: 10px; bottom: 10px; z-index: 25; padding: 6px 12px; font-size: 11px; }
+#menu { position: absolute; left: 80px; right: 80px; top: 50px; bottom: 40px; z-index: 30; background: rgba(0,0,0,.96); border: 2px solid #fff; border-radius: 12px; padding: 14px; overflow: auto; display: flex; flex-direction: column; gap: 10px; animation: pin .18s ease-out; }
+#menu[hidden] { display: none; } .mh { display: flex; justify-content: space-between; align-items: center; font-size: 18px; } .mg { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; } .mg > div { border: 1px solid #333; border-radius: 8px; padding: 8px; }
+input[type=range] { width: 150px; padding: 0; } input[type=checkbox] { width: 20px; padding: 0; }
+#wipe { position: absolute; inset: 0; background: #000; z-index: 28; pointer-events: none; opacity: 0; } #wipe.go { animation: wp .5s ease-out; } @keyframes wp { from { opacity: 1; } to { opacity: 0; } }
+.amb { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; } #fx2 { position: absolute; inset: 0; pointer-events: none; z-index: 29; }
+.tbar { text-align: center; } .tn { font-size: 22px; font-weight: 700; letter-spacing: 3px; } .tp { width: 600px; margin: 8px auto 0; } .tp > div { background: #fff; transition: width .2s; }
+.bar.pulse > div { animation: pl 1s ease-in-out infinite; } @keyframes pl { 50% { box-shadow: 0 0 14px #fff; filter: brightness(.7); } }
+.rm *, .rm { animation: none !important; transition: none !important; }
+.jb .ln, #menu .ln { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+
+/* ===== 1.4 ===== */
+#popup { z-index: 60; } .toast, .fz { z-index: 61; }
+.shop { max-height: 284px; overflow: auto; }
+.npc.shopnpc { bottom: 52px; } .npc.shopnpc img { width: 72px; height: 72px; } .npc.shopnpc .sp { max-width: 300px; }
+
+</style>
+</head>
+<body>
+<div id="guard" hidden></div>
+<div id="stage">
+  <div id="screen"><div id="boot" style="padding:24px;line-height:2">LOADING CELESTIA...</div></div>
+  <div id="popup" hidden></div>
+  <canvas id="fx" width="920" height="560"></canvas>
+</div>
+<script>
+function bootFail(f){document.getElementById('boot')&&(document.getElementById('boot').innerHTML='ERROR: COULD NOT LOAD '+f+'<br>UPLOAD ALL FILES TO THE REPO ROOT: index.html, style.css, data.js, game.js, game2.js, game3.js, game4.js, game5.js, game6.js, game7.js');}
+window.addEventListener('error',function(e){if(e.target&&e.target.src)bootFail(e.target.src.split('/').pop());},true);
+</script>
+<script>
+// Celestia - data & story text
+const FIRST_NAMES = ['Silent','Crimson','Lunar','Iron','Rogue','Drifting','Hollow','Bright','Wandering','Quiet','Rusty','Stellar','Pale','Wild'];
+const LAST_NAMES  = ['Comet','Sparrow','Voyager','Lantern','Falcon','Meridian','Harbor','Tide','Ember','Wren','Horizon','Nomad','Pilgrim','Spark'];
+
+const TUNING = {
+  minerRate: 0.5,      // Retro Miner: 0.5 per second
+  toughness: 0.3,      // Lunarrite toughness
+  need: 50,            // lunarrite required
+  reward: 5000,        // Zeals
+  warpSeconds: 2,      // travel animation length
+  travelSeconds: 5     // Port <-> Lear = 5 kilayears = 5 seconds
+};
+// mining speed = miner rate / toughness  (0.5 / 0.3 = 1.667 per second)
+TUNING.mineRate = TUNING.minerRate / TUNING.toughness;
+
+const PLACES = {
+  farport: { name: 'FARPORT', sub: 'JOB HUB PLANET' },
+  korr:    { name: 'KORR',    sub: 'LUNARRITE MINING PLANET' },
+  bazaar:  { name: 'BAZAAR',  sub: 'SHOP PLANET' },
+  home:    { name: 'HOME',    sub: 'YOUR PLANET' }
+};
+
+const SYSTEMS = [
+  { id: 'port', name: 'PORT SYSTEM', x: -240, y: 0, sun: 16, planets: [
+    { id: 'farport', name: 'FARPORT', r: 11, color: '#f7d878', angle: 0.7, speed: 0.25, orbit: 95 },
+    { id: 'bazaar', name: 'BAZAAR', r: 8, color: '#5fb6c8', angle: 3.6, speed: 0.4, orbit: 58 } ] },
+  { id: 'lear', name: 'LEAR SYSTEM', x: 240, y: 0, sun: 13, planets: [
+    { id: 'korr', name: 'KORR', r: 5.5, color: '#9a9a9a', angle: 2.4, speed: 0.35, orbit: 66 },
+    { id: 'home', name: 'HOME', r: 6.5, color: '#6bc57a', angle: 5.1, speed: 0.5, orbit: 40 } ] }
+];
+
+</script>
+<script>
+// Celestia - game logic
+const $ = s => document.querySelector(s);
+const T = TUNING;
+const S = { ship: '', loc: 'farport', step: 0, ore: 0, zeals: 0, mining: false,
+            view: 'name', mapUnlocked: false, travel: null };
+/* Tutorial steps:
+ 0 name ship | 1 find the client at Farport | 2 travel to Korr | 3 mine 50 lunarrite
+ 4 return to Farport | 5 deliver at the hut | 6 leave into space | 7 tutorial complete */
+
+let playable = false, last = performance.now();
+const rnd = a => a[Math.floor(Math.random() * a.length)];
+const randName = () => rnd(FIRST_NAMES) + ' ' + rnd(LAST_NAMES);
+
+/* ---------- tab pause / scaling ---------- */
+function checkPlay() {
+  const w = innerWidth, h = innerHeight;
+  playable = !document.hidden;
+  const g = $('#guard');
+  g.hidden = playable;
+  if (!playable) g.innerHTML = 'PAUSED<br>RETURN TO THIS TAB';
+  // stage keeps its 11.5:7 layout and scales to fit any tab size
+  const s = Math.min(w / 920, h / 560);
+  $('#stage').style.transform = `translate(-50%,-50%) scale(${s})`;
+}
+addEventListener('resize', () => checkPlay());
+document.addEventListener('visibilitychange', () => checkPlay());
+
+/* ---------- popups ---------- */
+function popup(text, label, cb) {
+  const p = $('#popup'); p.hidden = false;
+  p.innerHTML = `<div class="pt">${text}</div><button class="btn" id="pb">${label || 'OK'}</button>`;
+  $('#pb').onclick = () => { p.hidden = true; cb && cb(); };
+}
+function popups(list, done) {
+  const next = i => i >= list.length ? (done && done()) :
+    popup(list[i], i === list.length - 1 ? 'OK' : 'NEXT', () => next(i + 1));
+  next(0);
+}
+
+/* ---------- HUD ---------- */
+function questText() {
+  return ['', 'QUEST: FIND THE CLIENT', 'QUEST: GO TO KORR',
+    `QUEST: MINE LUNARRITE ${Math.floor(S.ore)}/${T.need}`, 'QUEST: RETURN TO FARPORT',
+    'QUEST: DELIVER TO THE HUT', 'QUEST: LEAVE INTO SPACE', 'TUTORIAL COMPLETE'][S.step] || '';
+}
+function hud() { return ''; }
+
+/* ---------- screens ---------- */
+function render() {
+  S.mining = false;
+  const el = $('#screen');
+  if (S.view === 'name') return renderName(el);
+  if (S.view === 'planet') return renderPlanet(el);
+  if (S.view === 'hut') return renderHut(el);
+  if (S.view === 'travel') return renderTravel(el);
+  if (S.view === 'map') return renderMap(el);
+}
+
+function renderName(el) {
+  el.innerHTML = `<div class="center"><h1>CELESTIA</h1>
+    <img src="${IMG.ship}" style="width:184px;height:112px;border:2px solid #fff">
+    <div>NAME YOUR SHIP</div>
+    <input id="nm" maxlength="24" value="${randName()}">
+    <div style="display:flex;gap:12px"><button class="btn" id="rn">RANDOMIZE</button><button class="btn" id="go">LAUNCH</button></div></div>`;
+  $('#rn').onclick = () => $('#nm').value = randName();
+  $('#go').onclick = () => {
+    S.ship = ($('#nm').value.trim() || randName()).toUpperCase();
+    S.step = 1; S.view = 'planet'; S.loc = 'farport'; render();
+    popups([`WELCOME, CAPTAIN OF THE ${S.ship}. THIS IS FARPORT, A JOB HUB PLANET.`,
+      'JOBS COME FROM PEOPLE. SOMEONE HERE HAS ASKED FOR A PILOT. GO TO THEIR HUT.']);
+  };
+}
+
+function renderPlanet(el) {
+  const L = S.loc, P = PLACES[L];
+  let acts = '', mid = '';
+  if (L === 'farport') {
+    if (S.step === 1 || S.step === 5) acts += `<button class="btn" id="hut">${S.step === 5 ? 'GO TO THE HUT (DELIVER)' : 'VISIT THE HUT'}</button>`;
+    if (S.step === 2) acts += `<button class="btn" id="tk">TRAVEL TO KORR</button>`;
+    if (S.step === 6) acts += `<button class="btn" id="leave">LEAVE INTO SPACE</button>`;
+    if (S.step >= 7) acts += `<button class="btn" id="hut">VISIT THE HUT</button><button class="btn" id="map">OPEN MAP</button>`;
+  } else {
+    if (S.step === 3) {
+      mid = `<div class="mid box"><div>LUNARRITE  TOUGHNESS ${T.toughness}</div>
+        <div id="ore">${S.ore.toFixed(1)} / ${T.need}</div>
+        <div class="bar"><div id="bar"></div></div></div>`;
+      acts += `<button class="btn" id="mine">START MINING</button>`;
+    }
+    if (S.step === 4) acts += `<button class="btn" id="tf">TRAVEL TO FARPORT</button>`;
+    if (S.step >= 7) acts += `<button class="btn" id="map">OPEN MAP</button>`;
+  }
+  el.innerHTML = `<img class="bg" src="${IMG[L]}">
+    ${hud()}${mid}
+    <div class="box" style="position:absolute;left:12px;top:46px;z-index:5">${P.name}<br><span style="font-size:8px">${P.sub}</span></div>
+    <div class="actions">${acts}</div>`;
+  const on = (id, f) => { const b = $('#' + id); if (b) b.onclick = f; };
+  on('hut', () => { S.view = 'hut'; render(); });
+  on('tk', () => startTravel('korr'));
+  on('tf', () => startTravel('farport'));
+  on('map', () => { S.view = 'map'; render(); });
+  on('leave', leaveIntoSpace);
+  on('mine', () => { S.mining = !S.mining; $('#mine').textContent = S.mining ? 'STOP MINING' : 'START MINING'; });
+  updateOre();
+}
+
+function updateOre() {
+  const o = $('#ore'); if (!o) return;
+  o.textContent = `${S.ore.toFixed(1)} / ${T.need}`;
+  $('#bar').style.width = (S.ore / T.need * 100) + '%';
+  $('#qt').textContent = questText();
+}
+
+function renderHut(el) {
+  let text, btn = '';
+  if (S.step === 1) {
+    text = `OLD TOBIN: "${S.ship}! I NEED ${T.need} LUNARRITE FROM KORR. I'LL PAY ${T.reward.toLocaleString()} ZEALS. BRING IT TO ME HERE."`;
+    btn = '<button class="btn" id="ok">ACCEPT JOB</button>';
+  } else if (S.step === 5) {
+    text = `OLD TOBIN: "THAT'S ${T.need} LUNARRITE! HERE ARE YOUR ${T.reward.toLocaleString()} ZEALS."`;
+    btn = '<button class="btn" id="ok">DELIVER LUNARRITE</button>';
+  } else text = 'OLD TOBIN: "SAFE FLIGHTS, CAPTAIN."';
+  el.innerHTML = `<div class="center"><div class="box" style="width:640px;line-height:2">${text}</div>
+    <div style="display:flex;gap:12px">${btn}<button class="btn" id="bk">LEAVE HUT</button></div></div>${hud()}`;
+  $('#bk').onclick = () => { S.view = 'planet'; render(); };
+  const ok = $('#ok');
+  if (ok) ok.onclick = () => {
+    if (S.step === 1) {
+      S.step = 2; S.view = 'planet'; render();
+      popups(['JOB ACCEPTED: MINE 50 LUNARRITE ON KORR AND BRING IT BACK.',
+        'PRESS TRAVEL TO KORR. THE JOURNEY TAKES 5 SECONDS.']);
+    } else {
+      S.step = 6; S.ore = 0; S.zeals += T.reward; S.view = 'planet'; render();
+      popups([`JOB COMPLETE! +${T.reward.toLocaleString()} ZEALS.`, 'YOU ARE READY. PRESS LEAVE INTO SPACE.']);
+    }
+  };
+}
+
+/* ---------- travel ---------- */
+const stars = Array.from({ length: 90 }, () => ({ x: Math.random() * 920, y: Math.random() * 560, s: 0.3 + Math.random() }));
+function startTravel(to) { S.travel = { to, t: 0 }; S.view = 'travel'; render(); }
+function renderTravel(el) {
+  // To use your own art, replace the values in assets.js (any image URL or data URI)
+  el.innerHTML = `<canvas id="tc" width="920" height="560" style="position:absolute;inset:0"></canvas>
+    <img id="warp" class="bg" src="${IMG.ship}">
+    <div class="tbar" id="tt"></div>`;
+}
+function tickTravel(dt) {
+  const tr = S.travel; tr.t += dt;
+  const warping = tr.t < T.warpSeconds;
+  const remain = Math.max(0, T.travelSeconds - Math.max(0, tr.t - T.warpSeconds));
+  const w = $('#warp'), r = $('#rem'), tt = $('#tt'); if (!tt) return;
+  if (w) w.style.display = warping ? 'block' : 'none';
+  if (r) r.style.display = warping ? 'none' : 'block';
+  tt.textContent = warping ? 'ENGAGING WARP...' : `TRAVELLING TO ${PLACES[tr.to].name}  -  ${remain.toFixed(1)} S REMAINING`;
+  const c = $('#tc').getContext('2d'); c.fillStyle = '#000'; c.fillRect(0, 0, 920, 560); c.fillStyle = '#fff';
+  for (const s of stars) { s.x -= s.s * (warping ? 900 : 120) * dt; if (s.x < -60) { s.x = 940; s.y = Math.random() * 560; }
+    c.fillRect(s.x, s.y, warping ? 40 * s.s : 4, 4); }
+  if (tr.t >= T.warpSeconds + T.travelSeconds) arrive(tr.to);
+}
+function arrive(dest) {
+  S.loc = dest; S.travel = null; S.view = 'planet';
+  if (dest === 'korr' && S.step === 2) {
+    S.step = 3; render();
+    popups(['THIS IS KORR. LUNARRITE HAS A TOUGHNESS OF 0.3.',
+      `TOUGHNESS 0.3 MEANS IT CAN BE MINED AT 3.3333X. YOUR RETRO MINER DOES 0.5/S, SO YOU MINE ${T.mineRate.toFixed(2)} PER SECOND.`,
+      'PRESS START MINING AND COLLECT 50 LUNARRITE.']);
+  } else if (dest === 'farport' && S.step === 4) {
+    S.step = 5; render();
+    popup('BACK AT FARPORT. TAKE THE LUNARRITE TO TOBIN\'S HUT.');
+  } else render();
+}
+
+/* ---------- leaving into space: pixel boom, then the map unlocks ---------- */
+function leaveIntoSpace() {
+  S.step = 7; S.mapUnlocked = true;
+  $('#screen').innerHTML = '';
+  const c = $('#fx'), x = c.getContext('2d');
+  const cols = ['#ffffff', '#bbbbbb', '#777777', '#f5a623'];
+  const ps = Array.from({ length: 260 }, () => { const a = Math.random() * 6.283, v = 40 + Math.random() * 380;
+    return { x: 460, y: 280, vx: Math.cos(a) * v, vy: Math.sin(a) * v, c: rnd(cols), z: 4 + Math.floor(Math.random() * 3) * 4 }; });
+  let t = 0, prev = performance.now();
+  (function loop(now) {
+    const dt = (now - prev) / 1000; prev = now; t += dt;
+    x.clearRect(0, 0, 920, 560);
+    for (const p of ps) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.985; p.vy *= 0.985;
+      x.globalAlpha = Math.max(0, 1 - t / 2); x.fillStyle = p.c; x.fillRect(Math.round(p.x / 4) * 4, Math.round(p.y / 4) * 4, p.z, p.z); }
+    x.globalAlpha = 1;
+    if (t < 2) return requestAnimationFrame(loop);
+    x.clearRect(0, 0, 920, 560);
+    S.view = 'map'; render();
+    popups(['SYSTEMS UNLOCKED: THE PORT SYSTEM AND THE LEAR SYSTEM.',
+      'DRAG TO MOVE THE MAP. SHIFT + DRAG, THE MOUSE WHEEL OR THE ROTATE BUTTONS TURN IT. CLICK A PLANET TO TRAVEL.'], showComplete);
+  })(prev);
+}
+
+/* ---------- map ---------- */
+const M = { cam: { x: 0, y: 0 }, rot: 0, z: 1, sel: null, drag: null, moved: 0 };
+function sysOf(loc) { return SYSTEMS.find(s => s.planet.id === loc); }
+function renderMap(el) {
+  const s = sysOf(S.loc); M.cam = { x: s.x, y: s.y }; M.sel = null;
+  el.innerHTML = `<canvas class="map" id="mc" width="920" height="560"></canvas>${hud()}
+    <div class="panel" id="mp"></div>
+    <div class="actions" style="bottom:44px"><button class="btn" id="rl">&lt; ROTATE</button><button class="btn" id="rr">ROTATE &gt;</button></div>
+    <div class="banner">MORE SYSTEMS - COMING SOON</div>`;
+  const c = $('#mc');
+  const pt = e => { const r = c.getBoundingClientRect(); return { x: (e.clientX - r.left) * 920 / r.width, y: (e.clientY - r.top) * 560 / r.height }; };
+  c.oncontextmenu = e => e.preventDefault();
+  c.onpointerdown = e => { c.setPointerCapture(e.pointerId); M.drag = pt(e); M.moved = 0; };
+  c.onpointermove = e => {
+    if (!M.drag) return;
+    const p = pt(e), dx = p.x - M.drag.x, dy = p.y - M.drag.y; M.moved += Math.abs(dx) + Math.abs(dy);
+    if (e.shiftKey || e.buttons === 2) M.rot += dx * 0.01;
+    else { const a = -M.rot; const z = M.z || 1; M.cam.x -= (dx * Math.cos(a) - dy * Math.sin(a)) / z; M.cam.y -= (dx * Math.sin(a) + dy * Math.cos(a)) / z; }
+    M.drag = p;
+  };
+  c.onpointerup = e => { if (M.moved < 5) pick(pt(e)); M.drag = null; };
+  c.onwheel = e => { e.preventDefault(); M.z = clamp((M.z || 1) * (e.deltaY < 0 ? 1.12 : .89), .25, 3); };
+  $('#rl').onclick = () => M.rot -= 0.3;
+  $('#rr').onclick = () => M.rot += 0.3;
+  panel();
+}
+const proj = (wx, wy) => { const dx = wx - M.cam.x, dy = wy - M.cam.y, c = Math.cos(M.rot), s = Math.sin(M.rot);
+  const z = M.z || 1; return { x: 460 + (dx * c - dy * s) * z, y: 280 + (dx * s + dy * c) * z }; };
+function planetPos(sys, time) { const p = sys.planet, a = p.angle + time * p.speed;
+  return proj(sys.x + Math.cos(a) * sys.ring, sys.y + Math.sin(a) * sys.ring); }
+function pick(p) {
+  const t = performance.now() / 1000; M.sel = null;
+  for (const s of SYSTEMS) { const q = planetPos(s, t); if (Math.hypot(q.x - p.x, q.y - p.y) < s.planet.r + 12) M.sel = s; }
+  panel();
+}
+function panel() {
+  const el = $('#mp'); if (!el) return;
+  const s = M.sel; if (!s) { el.innerHTML = '<div class="box" style="font-size:8px">CLICK A PLANET</div>'; return; }
+  const here = S.loc === s.planet.id;
+  el.innerHTML = `<div class="box">${s.planet.name}<br><span style="font-size:8px">${s.name}<br>${here ? 'YOU ARE HERE' : '5 KILAYEARS = 5 SECONDS'}</span></div>
+    <button class="btn" id="pgo">${here ? 'LAND' : 'TRAVEL TO ' + s.planet.name}</button>`;
+  $('#pgo').onclick = () => here ? (S.view = 'planet', render()) : startTravel(s.planet.id);
+}
+function drawMap() {
+  const c = $('#mc'); if (!c) return; const x = c.getContext('2d'), t = performance.now() / 1000;
+  x.fillStyle = '#000'; x.fillRect(0, 0, 920, 560);
+  x.fillStyle = '#444'; for (let i = 0; i < 70; i++) x.fillRect((i * 137) % 920, (i * 71) % 560, 2, 2);
+  const a = proj(SYSTEMS[0].x, SYSTEMS[0].y), b = proj(SYSTEMS[1].x, SYSTEMS[1].y);
+  x.strokeStyle = '#444'; x.setLineDash([6, 8]); x.beginPath(); x.moveTo(a.x, a.y); x.lineTo(b.x, b.y); x.stroke(); x.setLineDash([]);
+  x.font = '8px "Press Start 2P", monospace'; x.textAlign = 'center';
+  for (const s of SYSTEMS) {
+    const c0 = proj(s.x, s.y);
+    x.strokeStyle = '#999'; x.lineWidth = 2; x.beginPath(); x.arc(c0.x, c0.y, s.ring, 0, 6.283); x.stroke(); // grey, no fill
+    x.fillStyle = '#f5a623'; x.beginPath(); x.arc(c0.x, c0.y, s.sun, 0, 6.283); x.fill();               // sun
+    const q = planetPos(s, t);
+    x.fillStyle = s.planet.color; x.beginPath(); x.arc(q.x, q.y, s.planet.r, 0, 6.283); x.fill();
+    if (M.sel === s) { x.strokeStyle = '#fff'; x.strokeRect(q.x - s.planet.r - 6, q.y - s.planet.r - 6, s.planet.r * 2 + 12, s.planet.r * 2 + 12); }
+    x.fillStyle = '#fff'; x.fillText(s.name, c0.x, c0.y + s.ring + 24);
+    if (S.loc === s.planet.id) x.fillText('YOU', q.x, q.y - s.planet.r - 12);
+  }
+}
+
+/* ---------- main loop ---------- */
+function tick(now) {
+  const dt = Math.min(0.25, (now - last) / 1000); last = now;
+  if (playable) {
+    if (S.view === 'travel' && S.travel) tickTravel(dt);
+    else if (S.view === 'map') drawMap();
+    else if (S.mining && S.view === 'planet' && S.loc === 'korr' && S.step === 3) {
+      S.ore = Math.min(T.need, S.ore + T.mineRate * dt); updateOre();
+      if (S.ore >= T.need) { S.mining = false; S.step = 4; render();
+        popup('50 LUNARRITE COLLECTED! RETURN TO FARPORT TO DELIVER IT.'); }
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+</script>
+<script>
+/* Celestia 1.1 - ships, generated travel animation, colony quest line. Overrides functions from game.js */
+Object.assign(S, { type: 0, need: T.need, job: null, planet: '', cleaned: false, homes: 0, farms: 0, caves: 0,
+  pods: { home: 0, farm: 0, cave: 0 }, inv: { silver: 0, crust: 0, gold: 0, lunerite: 0, platinum: 0 },
+  moss: [], mossInit: false, won: false, acc: 0 });
+const PRI = ['tk', 'tf', 'hut', 'mine', 'dm', 'leave', 'ok', 'pgo', 'pgs', 'sell', 'ap', 'ex', 'in', 'go', 'pb'], DNG = ['bk', 'lv', 'ng', 'ab'];
+const B = (id, t) => `<button class="btn ${PRI.includes(id) ? 'pri' : DNG.includes(id) ? 'dng' : 'sec'}" id="${id}">${t}</button>`;
+const JOBS = [[30, 700], [60, 1600], [100, 3000]];
+const ITEMS = [['home', 'HOME POD', 300], ['farm', 'FARM POD', 800], ['cave', 'MINING EQUIPMENT (CAVE KIT)', 1500]];
+const RES = [{ k: 'silver', n: 'SILVER', r: 'COMMON', w: 50, v: 20 }, { k: 'crust', n: 'LUNER CRUST', r: 'UNCOMMON', w: 25, v: 45 },
+  { k: 'gold', n: 'GOLD', r: 'RARE', w: 15, v: 100 }, { k: 'lunerite', n: 'LUNERITE', r: 'EPIC', w: 7, v: 250 },
+  { k: 'platinum', n: 'PLATINUM', r: 'LEGENDARY', w: 3, v: 600 }];
+
+/* ---------- 11 ship designs (generated pixel art) ---------- */
+const SHIPS = [
+ { n: 'CORVETTE', d: 'Small, fast warship built for patrol, scouting or escort duty.', c: '#7fc8ff', L: 20, H: 2, wing: 4, sw: .6, fin: 3, eng: 1 },
+ { n: 'DESTROYER', d: 'Multi-role combatant that screens fleets, hunts raiders and patrols.', c: '#9fb4c9', L: 26, H: 3, wing: 3, sw: .9, fin: 2, eng: 2, turret: 2 },
+ { n: 'CRUISER', d: 'Medium vessel for independent missions, exploration or commerce raiding.', c: '#d6c59a', L: 30, H: 4, wing: 3, sw: 1, fin: 3, eng: 2, turret: 1 },
+ { n: 'BOMBER', d: 'Strike craft designed to attack heavy targets, stations or ground installations.', c: '#c98b6b', L: 24, H: 4, wing: 7, sw: .5, fin: 2, eng: 2, bay: 1 },
+ { n: 'INTERCEPTOR', d: 'Fast, short-range dogfighter built to shoot down fighters and bombers.', c: '#ff9f7a', L: 22, H: 1, wing: 6, sw: .7, fin: 4, eng: 1, fwd: 1 },
+ { n: 'DREADNOUGHT', d: 'Gigantic, heavily armored warship built for overwhelming firepower.', c: '#8d8fa8', L: 40, H: 6, wing: 2, sw: 3, fin: 2, eng: 3, turret: 4 },
+ { n: 'CARRIER', d: 'Large support capital ship that launches and repairs smaller craft or carries troops.', c: '#a8c4a2', L: 38, H: 5, wing: 0, sw: 1, fin: 2, eng: 3, deck: 1 },
+ { n: 'LANDER / SHUTTLE', d: 'Short-range vessel ferrying crews and cargo between orbit and a planet or moon.', c: '#e6e6e6', L: 16, H: 4, wing: 3, sw: .4, fin: 0, eng: 1, legs: 1 },
+ { n: 'STARFIGHTER / SKIFF', d: 'Agile personal or small-squadron ship for space fantasy and adventure.', c: '#ffd166', L: 18, H: 2, wing: 5, sw: .5, fin: 3, eng: 1, fwd: 1 },
+ { n: 'WORLDSHIP / ARK', d: 'Massive vessel built to carry entire populations or ecosystems across deep space.', c: '#7be0a3', L: 42, H: 7, wing: 0, sw: 1, fin: 0, eng: 4, rings: 1 },
+ { n: 'JUGGERNAUT / LEVIATHAN', d: 'Colossal, ancient warship that dominates entire star systems.', c: '#b36bff', L: 44, H: 8, wing: 3, sw: 2, fin: 3, eng: 3, spikes: 1 }];
+const shade = (h, k) => { const n = parseInt(h.slice(1), 16), f = v => Math.max(0, Math.min(255, Math.round(v * k)));
+  return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`; };
+const engY = s => Array.from({ length: s.eng }, (_, e) => 14 + (e - (s.eng - 1) / 2) * Math.max(2, Math.floor(s.H * 2 / s.eng)));
+function shipSprite(i) {
+  const s = SHIPS[i], c = document.createElement('canvas'); c.width = 52; c.height = 28;
+  const x = c.getContext('2d'), cy = 14, x0 = 4, P = (a, b, col) => { x.fillStyle = col; x.fillRect(Math.round(a), Math.round(b), 1, 1); };
+  for (let a = 1; a <= s.wing; a++) for (let xx = x0 + s.L * (s.fwd ? .45 : .35) + a * s.sw; xx < x0 + s.L * .85; xx++)
+    for (const d of [-1, 1]) P(xx, cy + d * (s.H + a), shade(s.c, .6 + (a % 2) * .12));
+  for (let a = 1; a <= s.fin; a++) for (let xx = x0 + 1; xx < x0 + 3 + s.fin - a; xx++) for (const d of [-1, 1]) P(xx, cy + d * (s.H + a), shade(s.c, .7));
+  for (let xx = 0; xx <= s.L; xx++) {
+    const t = xx / s.L, h = Math.max(0, Math.round(s.H * (t < .1 ? .5 + t * 5 : t < .75 ? 1 : 1 - (t - .75) / .25 * .95)));
+    for (let r = -h; r <= h; r++) { let k = r < -h / 2 ? 1.15 : r > h / 2 ? .7 : .95; if (Math.abs(r) === h) k *= .75; P(x0 + xx, cy + r, shade(s.c, k)); }
+    if (s.deck && xx > 3 && xx < s.L - 4) P(x0 + xx, cy, '#2a2a2a');
+    if (s.rings && xx % 5 === 2) for (let r = -h; r <= h; r++) P(x0 + xx, cy + r, '#1b3a2a');
+    if (s.turret && xx > 6 && xx % Math.ceil(s.L / (s.turret + 1)) === 0) { P(x0 + xx, cy - h - 1, '#ddd'); P(x0 + xx + 1, cy - h - 1, '#ddd'); }
+    if (s.spikes && xx % 4 === 1) for (let j = 1; j <= 2; j++) { P(x0 + xx, cy - h - j, shade(s.c, .6)); P(x0 + xx, cy + h + j, shade(s.c, .6)); }
+    if (s.legs && (xx === 3 || xx === s.L - 4)) { for (let j = 1; j <= 3; j++) P(x0 + xx, cy + h + j, '#999'); P(x0 + xx - 1, cy + h + 3, '#999'); P(x0 + xx + 1, cy + h + 3, '#999'); }
+  }
+  if (s.bay) for (let xx = 8; xx < 14; xx++) P(x0 + xx, cy + s.H, '#222');
+  const cx = x0 + Math.round(s.L * .72); P(cx, cy - 1, '#bdf4ff'); P(cx + 1, cy - 1, '#7fdcff'); P(cx, cy, '#5fb8e0');
+  engY(s).forEach(y => { P(x0 - 1, y, '#666'); P(x0, y, '#ff9d3c'); });
+  return c;
+}
+
+/* ---------- generated pixel scenes & sprites ---------- */
+const _sc = {};
+function sceneURL(k) {
+  if (_sc[k]) return _sc[k];
+  const c = document.createElement('canvas'); c.width = 92; c.height = 56; const x = c.getContext('2d');
+  let s = 7; const R = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  x.fillStyle = '#04050c'; x.fillRect(0, 0, 92, 56);
+  for (let i = 0; i < 60; i++) { x.fillStyle = R() < .2 ? '#fff' : '#667'; x.fillRect(R() * 92 | 0, R() * 56 | 0, 1, 1); }
+  const cx = 64, cy = 32, r = 30, base = [70, 170, 190];
+  for (let y = 0; y < 56; y++) for (let xx = 0; xx < 92; xx++) { const dx = xx - cx, dy = y - cy;
+    if (Math.hypot(dx, dy) < r) { const l = .3 + .7 * Math.max(0, (-dx * .6 - dy * .4) / r + .6) + Math.sin(y * .6 + R()) * .06;
+      x.fillStyle = `rgb(${base.map(v => Math.min(255, v * l) | 0)})`; x.fillRect(xx, y, 1, 1); } }
+  for (let i = 0; i < 40; i++) { const dx = -20 + R() * 30, dy = -4 + R() * 24; if (Math.hypot(cx + dx - cx, dy) < r - 4) { x.fillStyle = '#ffe27a'; x.fillRect(cx + dx | 0, cy + dy | 0, 1, 1); } }
+  for (let a = 0; a < 360; a += 2) { const q = a * Math.PI / 180, px = cx + Math.cos(q) * 46, py = cy + Math.sin(q) * 9;
+    if (py > cy || Math.abs(px - cx) > r) { x.fillStyle = 'rgba(225,205,255,.75)'; x.fillRect(px | 0, py | 0, 1, 1); } }
+  return _sc[k] = c.toDataURL();
+}
+const _sp = {};
+function spriteURL(k) {
+  if (_sp[k]) return _sp[k];
+  const c = document.createElement('canvas'), x = c.getContext('2d'); let s = 5; const R = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  if (k === 'moss') { c.width = 16; c.height = 12;
+    for (let y = 0; y < 12; y++) for (let xx = 0; xx < 16; xx++) if (Math.hypot((xx - 7.5) / 8, (y - 5.5) / 6) + R() * .25 < 1) { x.fillStyle = ['#2f7d32', '#3fa142', '#1f5c25', '#62c25a'][R() * 4 | 0]; x.fillRect(xx, y, 1, 1); } }
+  else { c.width = 14; c.height = 18; x.fillStyle = '#c9c9c9'; x.fillRect(0, 2, 14, 2); x.fillRect(5, 0, 4, 2);
+    for (let y = 4; y < 18; y++) { x.fillStyle = '#8a8a8a'; x.fillRect(1 + (y - 4) / 8 | 0, y, 12 - 2 * ((y - 4) / 8 | 0), 1); }
+    x.fillStyle = '#444'; for (let xx = 4; xx < 11; xx += 3) x.fillRect(xx, 6, 1, 10); }
+  return _sp[k] = c.toDataURL();
+}
+
+/* ---------- name + ship select ---------- */
+function renderName(el) {
+  el.innerHTML = `<div class="center" style="gap:10px"><h1>CELESTIA</h1><div class="sub">CHOOSE YOUR SHIP</div><div class="ships" id="sg"></div>
+    <div class="sd" id="sd"></div><input id="nm" maxlength="24" value="${randName()}">
+    <div class="row"><button class="btn" id="rn">RANDOMIZE NAME</button><button class="btn" id="go">LAUNCH</button></div></div>`;
+  const sel = i => { S.type = i; $$('.sc').forEach((e, j) => e.classList.toggle('on', j === i)); $('#sd').textContent = SHIPS[i].d; };
+  SHIPS.forEach((s, i) => { const d = document.createElement('div'); d.className = 'sc'; d.append(shipSprite(i), s.n); d.onclick = () => sel(i); $('#sg').append(d); });
+  sel(S.type);
+  $('#rn').onclick = () => $('#nm').value = randName();
+  $('#go').onclick = () => {
+    S.ship = ($('#nm').value.trim() || randName()).toUpperCase(); S.step = 1; S.view = 'planet'; S.loc = 'farport'; render();
+    popups([`WELCOME, CAPTAIN OF THE ${S.ship}. THIS IS FARPORT, A JOB HUB PLANET.`, 'JOBS COME FROM PEOPLE. SOMEONE HERE HAS ASKED FOR A PILOT. GO TO THEIR HUT.']);
+  };
+}
+const $$ = s => document.querySelectorAll(s);
+
+/* ---------- quest text ---------- */
+function questText() {
+  if (S.step >= 11) return !S.cleaned ? 'QUEST: CLEAN UP YOUR PLANET' : S.won ? 'COLONY ESTABLISHED' : `HOMES ${S.homes}/10  FARM ${S.farms}/1  CAVE ${S.caves}/1`;
+  return ['', 'QUEST: FIND THE CLIENT', 'QUEST: GO TO KORR', `QUEST: MINE LUNARRITE ${Math.floor(S.ore)}/${S.need}`, 'QUEST: RETURN TO FARPORT', 'QUEST: DELIVER TO THE HUT',
+    'QUEST: LEAVE INTO SPACE', 'QUEST: VISIT THE HUT IN FARPORT', `QUEST: MINE ${S.need} LUNARRITE FOR VEX`, 'QUEST: RETURN TO VEX AT FARPORT', 'QUEST: CLAIM YOUR PLANET'][S.step] || '';
+}
+function refreshHud() { const h = $('.hud'); if (h) h.lastElementChild.textContent = S.zeals.toLocaleString() + ' Z'; const q = $('#qt'); if (q) q.textContent = questText(); }
+function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; $('#stage').append(d); setTimeout(() => d.remove(), 2400); }
+
+/* ---------- planets ---------- */
+const canMine = () => S.step === 3 || S.step === 8 || (S.step >= 11 && S.job && !S.job.done);
+function renderPlanet(el) {
+  const L = S.loc; if (L === 'home') return renderHome(el); if (L === 'bazaar') return renderBazaar(el);
+  const P = PLACES[L]; let acts = '', mid = '';
+  if (L === 'farport') {
+    if (S.step === 2) acts += B('tk', 'TRAVEL TO KORR'); else if (S.step === 6) acts += B('leave', 'LEAVE INTO SPACE');
+    else if (S.step === 1 || S.step === 5 || S.step >= 7) acts += B('hut', S.step === 5 ? 'GO TO THE HUT (DELIVER)' : 'VISIT THE HUT');
+  } else {
+    if (canMine()) { mid = `<div class="mid box"><div>LUNARRITE &nbsp;TOUGHNESS ${T.toughness}</div><div id="ore">${S.ore.toFixed(1)} / ${S.need}</div><div class="bar"><div id="bar"></div></div></div>`; acts += B('mine', 'START MINING'); }
+    if (S.step === 4 || S.step === 9 || (S.job && S.job.done)) acts += B('tf', 'TRAVEL TO FARPORT');
+  }
+  if (S.mapUnlocked) acts += B('map', 'OPEN MAP');
+  el.innerHTML = `<img class="bg" src="${IMG[L]}">${hud()}${mid}<div class="box tl">${P.name}<br><span class="sm">${P.sub}</span></div><div class="actions">${acts}</div>`;
+  const on = (id, f) => { const b = $('#' + id); if (b) b.onclick = f; };
+  on('hut', () => { S.view = 'hut'; render(); }); on('tk', () => startTravel('korr')); on('tf', () => startTravel('farport'));
+  on('map', () => { S.view = 'map'; render(); }); on('leave', leaveIntoSpace);
+  on('mine', () => { S.mining = !S.mining; $('#mine').textContent = S.mining ? 'STOP MINING' : 'START MINING'; });
+  updateOre();
+}
+function updateOre() { const o = $('#ore'); if (!o) return; o.textContent = `${S.ore.toFixed(1)} / ${S.need}`; $('#bar').style.width = (S.ore / S.need * 100) + '%'; $('#qt').textContent = questText(); }
+function finishMine() {
+  S.mining = false;
+  if (S.step === 3) { S.step = 4; render(); popup('50 LUNARRITE COLLECTED! RETURN TO FARPORT TO DELIVER IT.'); }
+  else if (S.step === 8) { S.step = 9; render(); popup(`${S.need} LUNARRITE COLLECTED. TAKE IT BACK TO VEX AT FARPORT.`); }
+  else { S.job.done = true; render(); popup('JOB COLLECTED! RETURN TO THE FARPORT HUT TO GET PAID.'); }
+}
+
+/* ---------- hut ---------- */
+function renderHut(el) {
+  let text, btn = '', extra = '';
+  if (S.step === 1) { text = `OLD TOBIN: "${S.ship}! I NEED ${T.need} LUNARRITE FROM KORR. I'LL PAY ${T.reward.toLocaleString()} ZEALS. BRING IT TO ME HERE."`; btn = B('ok', 'ACCEPT JOB'); }
+  else if (S.step === 5) { text = `OLD TOBIN: "THAT'S ${T.need} LUNARRITE! HERE ARE YOUR ${T.reward.toLocaleString()} ZEALS."`; btn = B('ok', 'DELIVER LUNARRITE'); }
+  else if (S.step === 7) { text = `VEX (SKETCHY): "PSST... CAPTAIN ${S.ship}. I KNOW OF A PLANET NOBODY WANTS. IT COULD BE YOURS. BRING ME 20 LUNARRITE FROM KORR AND ASK NO QUESTIONS."`; btn = B('ok', 'ACCEPT SKETCHY JOB'); }
+  else if (S.step === 8 || S.step === 9) text = 'VEX: "20 LUNARRITE. KORR. DON\'T KEEP ME WAITING."';
+  else if (S.step === 10) { text = 'VEX: "...NOT BAD, CAPTAIN. THE DEED IS YOURS. NAME YOUR PLANET."'; extra = '<input id="pn" maxlength="20" placeholder="PLANET NAME">'; btn = B('ok', 'CLAIM PLANET'); }
+  else if (S.step >= 11) {
+    const j = S.job;
+    if (j && j.done) { text = `CLIENT: "THE ${j.need} LUNARRITE! HERE ARE ${j.reward} ZEALS."`; btn = B('ok', 'DELIVER'); }
+    else if (j) text = `ACTIVE JOB: MINE ${j.need} LUNARRITE ON KORR FOR ${j.reward} Z.`;
+    else { text = 'JOB BOARD: PICK A JOB. MINE LUNARRITE ON KORR AND BRING IT BACK FOR ZEALS.'; btn = JOBS.map((q, i) => `<button class="btn" data-j="${i}">MINE ${q[0]} - ${q[1]} Z</button>`).join(''); }
+  } else text = 'OLD TOBIN: "SAFE FLIGHTS, CAPTAIN."';
+  el.innerHTML = `<div class="center"><div class="box" style="width:660px;line-height:1.9;font-size:17px">${text}</div>${extra}<div class="row">${btn}<button class="btn" id="bk">LEAVE HUT</button></div></div>${hud()}`;
+  $('#bk').onclick = () => { S.view = 'planet'; render(); };
+  $$('[data-j]').forEach(b => b.onclick = () => { const q = JOBS[b.dataset.j]; S.job = { need: q[0], reward: q[1], done: false }; S.need = q[0]; S.ore = 0; S.view = 'planet'; render();
+    popup(`JOB ACCEPTED: MINE ${q[0]} LUNARRITE ON KORR, THEN RETURN HERE FOR ${q[1]} ZEALS.`); });
+  const ok = $('#ok'); if (!ok) return;
+  ok.onclick = () => {
+    if (S.step === 1) { S.step = 2; S.view = 'planet'; render(); popups(['JOB ACCEPTED: MINE 50 LUNARRITE ON KORR AND BRING IT BACK.', 'PRESS TRAVEL TO KORR. THE JOURNEY TAKES 5 SECONDS.']); }
+    else if (S.step === 5) { S.step = 6; S.ore = 0; S.zeals += T.reward; S.view = 'planet'; render(); popups([`JOB COMPLETE! +${T.reward.toLocaleString()} ZEALS.`, 'YOU ARE READY. PRESS LEAVE INTO SPACE.']); }
+    else if (S.step === 7) { S.step = 8; S.need = 20; S.ore = 0; S.view = 'planet'; render(); popup('VEX WANTS 20 LUNARRITE FROM KORR. OPEN THE MAP AND TRAVEL TO KORR.'); }
+    else if (S.step === 10) { const n = ($('#pn').value.trim() || 'NEW HOPE').toUpperCase(); S.planet = n; PLACES.home = { name: n, sub: 'YOUR PLANET' }; SYSTEMS[1].planets[1].name = n;
+      S.step = 11; S.ore = 0; S.view = 'planet'; render();
+      popups([`THE PLANET ${n} IS YOURS! IT ORBITS IN THE LEAR SYSTEM.`, 'OPEN THE MAP AND TRAVEL THERE. IT IS COVERED IN MOSS, SO CLEAN IT UP FIRST.',
+        'THEN VISIT THE BAZAAR IN THE PORT SYSTEM TO BUY HOME PODS, FARM PODS AND MINING EQUIPMENT. TAKE JOBS AT THE FARPORT HUT TO EARN ZEALS.']); }
+    else { S.zeals += S.job.reward; S.job = null; S.ore = 0; S.view = 'planet'; render(); popup('PAID! CHECK THE JOB BOARD FOR MORE WORK.'); }
+  };
+}
+
+/* ---------- your planet ---------- */
+function renderHome(el) {
+  el.innerHTML = `<canvas id="hc" width="230" height="140" class="bg"></canvas>${hud()}<div class="box tl">${S.planet}<br><span class="sm">YOUR PLANET</span></div><div class="hp box" id="hp"></div><div class="actions" id="ha"></div>`;
+  drawColony();
+  if (!S.cleaned) {
+    if (!S.mossInit) { S.mossInit = true; S.moss = Array.from({ length: 9 }, (_, i) => ({ x: 40 + ((i * 173) % 640), y: 300 + ((i * 97) % 170) })); }
+    const bin = new Image(); bin.src = spriteURL('bin'); bin.style.cssText = 'position:absolute;left:800px;top:410px;width:84px;height:108px;z-index:5'; el.append(bin);
+    S.moss.forEach(m => { const im = new Image(); im.src = spriteURL('moss'); im.className = 'moss'; im.draggable = false; im.style.left = m.x + 'px'; im.style.top = m.y + 'px'; el.append(im); dragMoss(im, m); });
+    mossInfo();
+  } else colonyUI();
+}
+function mossInfo() { $('#hp').innerHTML = `<b>CLEAN-UP</b><br><span class="sm">DRAG THE MOSS INTO THE TRASH BIN.<br>${S.moss.length} PATCHES LEFT</span>`; }
+function dragMoss(im, m) {
+  let ox, oy;
+  const pos = e => { const r = $('#stage').getBoundingClientRect(), sc = r.width / 920; return [(e.clientX - r.left) / sc, (e.clientY - r.top) / sc]; };
+  im.onpointerdown = e => { im.setPointerCapture(e.pointerId); const [x, y] = pos(e); ox = x - m.x; oy = y - m.y; im.style.cursor = 'grabbing'; };
+  im.onpointermove = e => { if (ox === undefined) return; const [x, y] = pos(e); m.x = x - ox; m.y = y - oy; im.style.left = m.x + 'px'; im.style.top = m.y + 'px'; };
+  im.onpointerup = () => { ox = undefined; im.style.cursor = 'grab'; const cx = m.x + 36, cy = m.y + 27;
+    if (cx > 790 && cx < 890 && cy > 400 && cy < 520) { im.remove(); S.moss = S.moss.filter(q => q !== m); mossInfo();
+      if (!S.moss.length) { S.cleaned = true; render(); popups(['PLANET CLEANED! THE GROUND IS READY FOR BUILDING.', 'BUY HOME PODS, A FARM POD AND MINING EQUIPMENT AT THE BAZAAR. BUILD 10 HOMES, 1 FARM AND A CAVE.']); } } };
+}
+function colonyUI() {
+  $('#ha').innerHTML = B('bh', 'BUILD HOME') + B('bf', 'BUILD FARM') + B('bc', 'BUILD CAVE') + B('map', 'OPEN MAP');
+  const bld = (id, k, cnt, max) => { $('#' + id).onclick = () => { if (S.pods[k] > 0 && S[cnt] < max) { S.pods[k]--; S[cnt]++; colonyInfo(); refreshHud(); checkWin(); } }; };
+  bld('bh', 'home', 'homes', 10); bld('bf', 'farm', 'farms', 1); bld('bc', 'cave', 'caves', 1);
+  $('#map').onclick = () => { S.view = 'map'; render(); };
+  colonyInfo();
+}
+function colonyInfo() {
+  const hp = $('#hp'); if (!hp) return;
+  hp.innerHTML = `<b>COLONY</b><br>HOMES ${S.homes}/10 &nbsp;FARM ${S.farms}/1 &nbsp;CAVE ${S.caves}/1<br><span class="sm">PODS IN CARGO: ${S.pods.home} HOME, ${S.pods.farm} FARM, ${S.pods.cave} CAVE KIT<br>` +
+    (S.caves && S.homes ? 'RESIDENTS ARE MINING' + (S.farms ? ' (FARM BONUS)' : '') : 'BUILD A CAVE + HOMES SO RESIDENTS CAN WORK') + '</span><br>' +
+    RES.map(r => `<span class="sm">${r.n}: ${S.inv[r.k]}</span>`).join('<br>');
+  const b = (id, k, cnt, max) => { const e = $('#' + id); if (e) e.disabled = !(S.pods[k] > 0 && S[cnt] < max); };
+  b('bh', 'home', 'homes', 10); b('bf', 'farm', 'farms', 1); b('bc', 'cave', 'caves', 1);
+}
+function checkWin() { if (!S.won && S.homes >= 10 && S.farms >= 1 && S.caves >= 1) { S.won = true; refreshHud();
+  popups(['COLONY ESTABLISHED! 10 HOMES, A FARM AND A CAVE ARE UP AND RUNNING.', 'YOUR RESIDENTS KEEP MINING FOR YOU. SELL THEIR FINDS AT THE BAZAAR. MORE COMING SOON.']); } }
+const disc = (x, cx, cy, r, col) => { x.fillStyle = col; for (let y = -r; y <= r; y++) for (let a = -r; a <= r; a++) if (a * a + y * y <= r * r) x.fillRect(cx + a, cy + y, 1, 1); };
+function drawColony() {
+  const c = $('#hc'); if (!c) return; const x = c.getContext('2d'), t = performance.now() / 1000;
+  ['#0b0d24', '#14123a', '#1f1650', '#2d1b5e', '#43246b', '#5d2d72'].forEach((col, i) => { x.fillStyle = col; x.fillRect(0, i * 13, 230, 13); });
+  for (let i = 0; i < 40; i++) { x.fillStyle = (Math.sin(t * 2 + i) > .6) ? '#667' : '#fff'; x.fillRect((i * 53) % 230, (i * 29) % 60, 1, 1); }
+  disc(x, 40, 38, 14, '#f7d878'); disc(x, 185, 22, 9, '#9a9a9a');
+  x.fillStyle = '#2f5d36'; x.fillRect(0, 78, 230, 62);
+  for (let i = 0; i < 400; i++) { x.fillStyle = i % 3 ? '#3a7a43' : '#2a4f30'; x.fillRect((i * 37) % 230, 78 + (i * 17) % 62, 2, 1); }
+  for (let xx = 0; xx < 230; xx++) { x.fillStyle = '#244a2c'; x.fillRect(xx, 72 + Math.round(8 * Math.sin(xx / 17) + 5 * Math.sin(xx / 7)), 1, 8); }
+  for (let i = 0; i < S.homes; i++) { const hx = 8 + (i % 5) * 31, hy = 84 + Math.floor(i / 5) * 24;
+    x.fillStyle = '#e8d9b0'; x.fillRect(hx, hy + 6, 22, 12); x.fillStyle = '#b5483a'; for (let k = 0; k < 6; k++) x.fillRect(hx + k, hy + 5 - k, 22 - 2 * k, 1);
+    x.fillStyle = '#5a3a1e'; x.fillRect(hx + 4, hy + 13, 4, 5); x.fillStyle = '#ffe27a'; x.fillRect(hx + 12, hy + 9, 5, 4); }
+  if (S.farms) { x.fillStyle = '#6b4a2b'; x.fillRect(172, 112, 50, 22); for (let i = 0; i < 12; i++) { x.fillStyle = i % 2 ? '#7ddc5a' : '#4fb83a'; x.fillRect(175 + i * 4, 114, 2, 18); } }
+  if (S.caves) { for (let y = 0; y < 34; y++) { const w = Math.round(Math.sqrt(Math.max(0, 1 - ((y - 34) / 34) ** 2)) * 24); x.fillStyle = y % 5 ? '#6b6b78' : '#55555f'; x.fillRect(199 - w, 70 + y, w * 2, 1); }
+    x.fillStyle = '#0a0a10'; x.fillRect(193, 92, 12, 12); x.fillRect(194, 90, 10, 2); x.fillStyle = Math.sin(t * 6) > 0 ? '#ffb347' : '#ff9d3c'; x.fillRect(190, 90, 2, 2); }
+  const cols = ['#4fa3ff', '#ff6b6b', '#ffd166', '#c77dff', '#7be0a3'];
+  for (let i = 0; i < S.homes; i++) { const px = (8 + i * 23 + t * (6 + i % 3 * 4)) % 210, py = 126 + (i % 2) * 6;
+    x.fillStyle = '#ffd9b0'; x.fillRect(px | 0, py, 2, 2); x.fillStyle = cols[i % 5]; x.fillRect(px | 0, py + 2, 2, 3); }
+}
+function produce(dt) {
+  if (!(S.caves && S.homes)) return;
+  S.acc += dt; if (S.acc < 10) return; S.acc = 0;
+  const rolls = Math.ceil(S.homes / 3) + S.farms, got = {};
+  for (let i = 0; i < rolls; i++) { let n = Math.random() * 100, r = RES[0]; for (const q of RES) { if (n < q.w) { r = q; break; } n -= q.w; } S.inv[r.k]++; got[r.n] = (got[r.n] || 0) + 1; }
+  toast('RESIDENTS FOUND: ' + Object.entries(got).map(([k, v]) => `+${v} ${k}`).join(', ')); if (S.view === 'planet' && S.loc === 'home') colonyInfo(); if (S.view === 'planet' && S.loc === 'bazaar') shopUI();
+}
+
+/* ---------- bazaar ---------- */
+function renderBazaar(el) {
+  el.innerHTML = `<img class="bg" src="${sceneURL('bazaar')}">${hud()}<div class="box tl">BAZAAR<br><span class="sm">SHOP PLANET</span></div><div class="shop box" id="sh"></div><div class="actions">${B('map', 'OPEN MAP')}</div>`;
+  $('#map').onclick = () => { S.view = 'map'; render(); }; shopUI();
+}
+function shopUI() {
+  const total = RES.reduce((a, r) => a + S.inv[r.k] * r.v, 0);
+  $('#sh').innerHTML = '<b>BUY</b>' + ITEMS.map(i => `<div class="ln"><span>${i[1]} <span class="sm">${i[2]} Z (HAVE ${S.pods[i[0]]})</span></span><button class="btn" data-b="${i[0]}" ${S.zeals < i[2] ? 'disabled' : ''}>BUY</button></div>`).join('') +
+    '<b>SELL</b>' + RES.map(r => `<div class="ln sm"><span>${r.n} (${r.r})</span><span>${S.inv[r.k]} x ${r.v} Z</span></div>`).join('') +
+    `<div class="ln"><span>TOTAL ${total} Z</span><button class="btn" id="sell" ${total ? '' : 'disabled'}>SELL ALL</button></div>`;
+  $$('[data-b]').forEach(b => b.onclick = () => { const it = ITEMS.find(i => i[0] === b.dataset.b); if (S.zeals >= it[2]) { S.zeals -= it[2]; S.pods[it[0]]++; refreshHud(); shopUI(); } });
+  $('#sell').onclick = () => { S.zeals += total; RES.forEach(r => S.inv[r.k] = 0); refreshHud(); shopUI(); toast(`SOLD FOR ${total} Z`); };
+}
+
+/* ---------- generated travel animation: ship + exhaust + gliding pixel stars ---------- */
+function startTravel(to) { S.travel = { to, t: 0, dur: sysOf(S.loc) === sysOf(to) ? 2 : T.travelSeconds, sp: [] }; S.view = 'travel'; render(); }
+function renderTravel(el) { el.innerHTML = '<canvas id="tc" width="920" height="560" style="position:absolute;inset:0"></canvas><div class="tbar" id="tt"></div>'; }
+function tickTravel(dt) {
+  const tr = S.travel; tr.t += dt; const warp = tr.t < T.warpSeconds, rem = Math.max(0, tr.dur - Math.max(0, tr.t - T.warpSeconds)), tt = $('#tt'); if (!tt) return;
+  tt.textContent = warp ? 'ENGAGING DRIVES...' : `TRAVELLING TO ${(PLACES[tr.to].name).toUpperCase()}  -  ${rem.toFixed(1)} S REMAINING`;
+  const c = $('#tc').getContext('2d'), sp = SHIPS[S.type], spr = S._spr && S._spr.t === S.type ? S._spr.c : (S._spr = { t: S.type, c: shipSprite(S.type) }).c;
+  c.imageSmoothingEnabled = false; c.fillStyle = '#02030a'; c.fillRect(0, 0, 920, 560);
+  for (let i = 0; i < 6; i++) { c.fillStyle = 'rgba(90,60,160,.14)'; const nx = ((i * 211 - tr.t * 20) % 1100 + 1100) % 1100 - 100; c.fillRect(Math.round(nx / 8) * 8, 60 + i * 80, 160 + i * 20, 48); }
+  for (const s of stars) { s.x -= s.s * (warp ? 1100 : 220) * dt; if (s.x < -80) { s.x = 940; s.y = Math.random() * 560; }
+    const z = s.s < .6 ? 4 : s.s < 1 ? 8 : 12; c.fillStyle = s.s < .6 ? '#667' : s.s < 1 ? '#bbb' : '#fff'; c.fillRect(Math.round(s.x / 4) * 4, Math.round(s.y / 4) * 4, warp ? z * 4 : z, 4); }
+  const sc = 6, bob = Math.round(Math.sin(tr.t * 3) * 2) * 4, sx = 200, sy = 280 - 14 * sc + bob;
+  engY(sp).forEach(ey => { const fy = sy + ey * sc, len = 7 + (Math.random() * 5 | 0) + (warp ? 4 : 0);
+    ['#fff', '#fff3b0', '#ffd24a', '#ff9d3c', '#ff5a2a', '#a02a1a', '#601810'].forEach((col, k) => { const l = Math.min(len, 3 + k * 2); c.fillStyle = col; c.fillRect(sx + 4 * sc - l * sc + 6 * sc * 0, fy, 0, 0); });
+    for (let k = 0; k < len; k++) { c.fillStyle = ['#fff', '#fff3b0', '#ffd24a', '#ff9d3c', '#ff5a2a', '#a02a1a', '#601810'][Math.min(6, k >> 1)]; const h = k < 3 ? sc : k < 7 ? sc - 2 : 4; c.fillRect(sx + 3 * sc - (k + 1) * sc, fy + (sc - h) / 2, sc, h); }
+    tr.sp.push({ x: sx + 2 * sc, y: fy + 2, vx: -(250 + Math.random() * 300), vy: (Math.random() - .5) * 60, l: 1 }); });
+  tr.sp = tr.sp.filter(p => (p.l -= dt * 1.6) > 0); for (const p of tr.sp) { p.x += p.vx * dt; p.y += p.vy * dt; c.fillStyle = p.l > .5 ? '#ffb347' : '#ff5a2a'; c.fillRect(Math.round(p.x / 4) * 4, Math.round(p.y / 4) * 4, 4, 4); }
+  c.drawImage(spr, sx, sy, 52 * sc, 28 * sc);
+  if (tr.t >= T.warpSeconds + tr.dur) arrive(tr.to);
+}
+function arrive(d) {
+  S.loc = d; S.travel = null; S.view = 'planet';
+  if (d === 'korr' && S.step === 2) { S.step = 3; render();
+    popups(['THIS IS KORR. LUNARRITE HAS A TOUGHNESS OF 0.3.', `TOUGHNESS 0.3 MEANS IT CAN BE MINED AT 3.3333X. YOUR RETRO MINER DOES 0.5/S, SO YOU MINE ${T.mineRate.toFixed(2)} PER SECOND.`, 'PRESS START MINING AND COLLECT 50 LUNARRITE.']); }
+  else if (d === 'farport' && S.step === 4) { S.step = 5; render(); popup('BACK AT FARPORT. TAKE THE LUNARRITE TO TOBIN\'S HUT.'); }
+  else if (d === 'farport' && S.step === 9) { S.step = 10; render(); popup('BACK AT FARPORT. VEX IS WAITING AT THE HUT.'); }
+  else render();
+}
+
+/* ---------- tutorial complete card ---------- */
+function showComplete() {
+  S.step = 7; refreshHud();
+  popup(`<div style="font-size:28px;font-weight:700;letter-spacing:4px;text-align:center">&#10003; TUTORIAL COMPLETE</div><div style="text-align:center;margin-top:10px">YOU TRAVELLED, MINED, DELIVERED AND UNLOCKED THE MAP.<br>REWARD EARNED: ${T.reward.toLocaleString()} ZEALS</div>`, 'CONTINUE',
+    () => popup('NEXT: TRAVEL TO FARPORT AND VISIT THE HUT. A SKETCHY GUY HAS A PROPOSAL FOR YOU.', 'OK'));
+}
+
+/* ---------- map (several planets per system) ---------- */
+const mapPlanets = () => SYSTEMS.flatMap(s => s.planets.filter(p => p.id !== 'home' || S.planet).map(p => ({ s, p })));
+function sysOf(loc) { return SYSTEMS.find(s => s.planets.some(p => p.id === loc)) || SYSTEMS[0]; }
+function planetPos(s, p, t) { const a = p.angle + t * p.speed; return proj(s.x + Math.cos(a) * p.orbit, s.y + Math.sin(a) * p.orbit); }
+function pick(pt) { const t = performance.now() / 1000; M.sel = null; for (const { s, p } of mapPlanets()) { const q = planetPos(s, p, t); if (Math.hypot(q.x - pt.x, q.y - pt.y) < p.r + 12) M.sel = p; } panel(); }
+function panel() {
+  const el = $('#mp'); if (!el) return; const p = M.sel; if (!p) { el.innerHTML = '<div class="box sm">CLICK A PLANET</div>'; return; }
+  const here = S.loc === p.id, same = sysOf(S.loc) === sysOf(p.id);
+  el.innerHTML = `<div class="box"><b>${p.name}</b><br><span class="sm">${sysOf(p.id).name}<br>${here ? 'YOU ARE HERE' : same ? 'SHORT HOP: 2 SECONDS' : '5 KILAYEARS = 5 SECONDS'}</span></div><button class="btn" id="pgo">${here ? 'LAND' : 'TRAVEL TO ' + p.name}</button>`;
+  $('#pgo').onclick = () => here ? (S.view = 'planet', render()) : startTravel(p.id);
+}
+function drawMap() {
+  const c = $('#mc'); if (!c) return; const x = c.getContext('2d'), t = performance.now() / 1000;
+  x.fillStyle = '#000'; x.fillRect(0, 0, 920, 560); x.fillStyle = '#444'; for (let i = 0; i < 70; i++) x.fillRect((i * 137) % 920, (i * 71) % 560, 2, 2);
+  const a = proj(SYSTEMS[0].x, SYSTEMS[0].y), b = proj(SYSTEMS[1].x, SYSTEMS[1].y);
+  x.strokeStyle = '#444'; x.setLineDash([6, 8]); x.beginPath(); x.moveTo(a.x, a.y); x.lineTo(b.x, b.y); x.stroke(); x.setLineDash([]);
+  x.font = '600 13px Ubuntu, sans-serif'; x.textAlign = 'center';
+  for (const s of SYSTEMS) { const c0 = proj(s.x, s.y);
+    for (const p of s.planets) if (p.id !== 'home' || S.planet) { x.strokeStyle = '#999'; x.lineWidth = 2; x.beginPath(); x.arc(c0.x, c0.y, p.orbit, 0, 6.283); x.stroke(); }
+    x.fillStyle = '#f5a623'; x.beginPath(); x.arc(c0.x, c0.y, s.sun, 0, 6.283); x.fill();
+    x.fillStyle = '#fff'; x.fillText(s.name, c0.x, c0.y + 118); }
+  for (const { s, p } of mapPlanets()) { const q = planetPos(s, p, t);
+    x.fillStyle = p.color; x.beginPath(); x.arc(q.x, q.y, p.r, 0, 6.283); x.fill();
+    if (M.sel === p) { x.strokeStyle = '#fff'; x.strokeRect(q.x - p.r - 6, q.y - p.r - 6, p.r * 2 + 12, p.r * 2 + 12); }
+    x.fillStyle = '#fff'; x.fillText(p.name, q.x, q.y + p.r + 16); if (S.loc === p.id) x.fillText('YOU', q.x, q.y - p.r - 10); }
+}
+
+/* ---------- main loop ---------- */
+function tick(now) {
+  const dt = Math.min(0.25, (now - last) / 1000); last = now;
+  if (playable) {
+    if (S.view === 'travel' && S.travel) tickTravel(dt);
+    else if (S.view === 'map') drawMap();
+    else if (S.mining && S.view === 'planet' && S.loc === 'korr' && canMine()) { S.ore = Math.min(S.need, S.ore + T.mineRate * dt); updateOre(); if (S.ore >= S.need) finishMine(); }
+    else if (S.view === 'planet' && S.loc === 'home' && S.cleaned) drawColony();
+    produce(dt);
+  }
+  requestAnimationFrame(tick);
+}
+
+</script>
+<script>
+/* Celestia 1.2 (part A): 200x100 ships, generated scenes, perks, save, sound, market */
+Object.assign(S, { up: { engine: 0, cargo: 0, scanner: 0, weapon: 0, armor: 0 }, cyber: {}, paint: {}, custom: false,
+  jobs: [], jobT: 0, done: 0, mk: {}, fr: 0, lore: [], sv: 0, cd: 0 });
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const MATS = {}; RES.forEach(r => MATS[r.k] = { n: r.n, base: r.v });
+const COLONY = RES.map(r => r.k);
+const IMG = new Proxy({}, { get: (t, k) => sceneURL(k) });   // arrival images are now all generated
+
+/* ---------- ship perks ---------- */
+// [travel x, mining x, range +, thrust, cargo +, combat +]
+const PERK = [[.85, 1, .05, .65, 0, 0], [1, 1, .02, .55, 0, .1], [.95, 1, .10, .5, 0, .03], [1.1, 1.15, 0, .35, 0, .08], [.7, .8, .06, .85, 0, .04],
+  [1.25, 1.25, 0, .15, 0, .18], [1.2, 1, .08, .25, 100, .05], [1.1, 1.35, 0, .45, 20, 0], [.8, .9, .10, .8, 0, .06], [1.4, 1.1, .18, .1, 200, 0], [1.3, 1.5, .02, .2, 0, .15]];
+SHIPS.forEach((s, i) => { const p = PERK[i]; Object.assign(s, { trv: p[0], mine: p[1], rng: p[2], thr: p[3], cargo: p[4], cmb: p[5] }); });
+const travelMult = () => SHIPS[S.type].trv * (1 - .07 * S.up.engine) * (S.lsb ? .1 : 1);
+const mineMult = () => SHIPS[S.type].mine * (1 + (S.cyber.neural ? .25 : 0)) * (1 + .03 * (S.bm || 0));
+const rangeP = () => clamp(.30 + SHIPS[S.type].rng + .04 * S.up.scanner + (S.cyber.optic ? .08 : 0) + .01 * (S.bs || 0), .05, .9);
+const thrustP = () => clamp(SHIPS[S.type].thr + (S.cyber.reflex ? .1 : 0) + .03 * S.up.engine, .05, .95);
+const cargoCap = () => 100 + SHIPS[S.type].cargo + 60 * S.up.cargo + 10 * (S.bc || 0);
+const cargoUsed = () => Object.keys(S.inv).filter(k => !COLONY.includes(k)).reduce((a, k) => a + S.inv[k], 0);
+const perkText = i => { const s = SHIPS[i], f = v => (v > 1 ? '+' : '') + Math.round((v - 1) * 100) + '%';
+  return `TRAVEL TIME ${f(s.trv)} | MINING ${f(s.mine)} | RANGE +${Math.round(s.rng * 100)}% | THRUST ${Math.round(s.thr * 100)}%` + (s.cargo ? ` | CARGO +${s.cargo}` : ''); };
+
+/* ---------- 200 x 100 ship sprites ---------- */
+const SPEC = [
+ { c: '#5aa9e6', a: '#ffd166', p: [[14, 6], [42, 10], [112, 11], [160, 8], [193, 1]], w: [[[68, 10], [126, 10], [94, 30], [54, 37]], [[18, 6], [40, 6], [14, 20]]], eng: 2, cock: 158, stripe: 1 },
+ { c: '#8aa0b8', a: '#e84a5f', p: [[12, 12], [50, 16], [135, 16], [172, 10], [195, 1]], w: [[[58, 16], [112, 16], [88, 30], [46, 32]], [[16, 12], [36, 12], [10, 26]]], eng: 2, tur: [70, 108, 128], tower: 84, cock: 170, win: 1 },
+ { c: '#d4b483', a: '#2d6a4f', p: [[10, 16], [40, 20], [142, 20], [178, 12], [195, 1]], w: [[[66, 20], [130, 20], [100, 35], [54, 39]], [[14, 16], [40, 16], [10, 32]]], eng: 2, tur: [58], win: 2, cock: 166 },
+ { c: '#b5835a', a: '#2b2d42', p: [[12, 16], [30, 22], [122, 23], [170, 15], [192, 3]], w: [[[46, 22], [135, 22], [160, 46], [28, 48]]], eng: 2, bay: 1, cock: 162, win: 1 },
+ { c: '#ef6f5e', a: '#ffffff', p: [[14, 5], [50, 8], [132, 7], [197, .5]], w: [[[104, 8], [150, 8], [58, 46], [26, 46]], [[150, 6], [180, 6], [168, 14]]], eng: 1, cock: 150, stripe: 1 },
+ { c: '#6c7189', a: '#c1121f', p: [[8, 22], [30, 30], [152, 30], [186, 16], [197, 2]], w: [[[42, 30], [122, 30], [100, 42], [30, 44]]], eng: 3, tur: [48, 70, 92, 114, 136], tower: 62, cock: 178, win: 2 },
+ { c: '#8fb996', a: '#f4d35e', p: [[8, 18], [24, 24], [162, 24], [192, 12], [198, 2]], w: [[[20, 24], [60, 24], [40, 38], [12, 38]]], eng: 3, deck: 1, tower: 128, win: 1 },
+ { c: '#d9d9d9', a: '#ff7b00', p: [[16, 22], [26, 26], [122, 26], [160, 17], [178, 4]], w: [[[52, 26], [96, 26], [80, 34], [48, 34]]], eng: 2, legs: 1, cock: 152, win: 1, stripe: 1 },
+ { c: '#f4c542', a: '#2b2d42', p: [[16, 7], [62, 11], [122, 9], [192, 1]], w: [[[70, 11], [130, 11], [96, 42], [46, 46]], [[130, 8], [170, 8], [160, 18]]], eng: 2, cock: 140, stripe: 1 },
+ { c: '#6fcf97', a: '#22577a', p: [[8, 30], [20, 36], [152, 36], [184, 24], [197, 4]], w: [], eng: 4, rings: 1, win: 0 },
+ { c: '#8e5bd1', a: '#ff3860', p: [[6, 28], [30, 36], [132, 34], [172, 26], [197, 6]], w: [[[50, 34], [120, 34], [104, 44], [34, 46]]], eng: 3, spikes: 1, veins: 1 }];
+const _ss = {}, _eng = {};
+function shipSprite(i, paint) {
+  paint = paint || {}; const key = i + '|' + (paint.hull || '') + (paint.accent || '') + (paint.glow || '');
+  if (!_ss[key]) _ss[key] = buildShip(i, paint);
+  const c = document.createElement('canvas'); c.width = 200; c.height = 100; c.getContext('2d').drawImage(_ss[key], 0, 0); return c;
+}
+const shipEngY = i => { shipSprite(i, {}); return _eng[i]; };
+function buildShip(i, pt) {
+  const sp = SPEC[i], base = pt.hull || sp.c, acc = pt.accent || sp.a, glow = pt.glow || '#ff9d3c', cy = 50;
+  const c = document.createElement('canvas'); c.width = 200; c.height = 100; const x = c.getContext('2d');
+  const P = (a, b, col) => { x.fillStyle = col; x.fillRect(Math.round(a), Math.round(b), 1, 1); };
+  const R = (a, b, w, h, col) => { x.fillStyle = col; x.fillRect(Math.round(a), Math.round(b), w, h); };
+  const prof = X => { const p = sp.p; if (X < p[0][0] || X > p[p.length - 1][0]) return 0;
+    for (let k = 0; k < p.length - 1; k++) if (X <= p[k + 1][0]) { const t = (X - p[k][0]) / (p[k + 1][0] - p[k][0]); return p[k][1] + (p[k + 1][1] - p[k][1]) * t; } return 0; };
+  const inP = (poly, X, Y) => { let q = false; for (let a = 0, b = poly.length - 1; a < poly.length; b = a++) { const [xi, yi] = poly[a], [xj, yj] = poly[b];
+    if ((yi > Y) !== (yj > Y) && X < (xj - xi) * (Y - yi) / (yj - yi) + xi) q = !q; } return q; };
+  for (const poly of sp.w) for (let X = 0; X < 200; X++) for (let Y = 1; Y < 50; Y++) if (inP(poly, X, Y)) {
+    const edge = !inP(poly, X, Y + 1);
+    for (const d of [-1, 1]) P(X, cy + d * Y, edge ? acc : shade(base, (d < 0 ? .95 : .6) - Y / 160 + ((X + Y) % 16 === 0 ? -.14 : 0))); }
+  for (let X = 0; X < 200; X++) { const h = Math.round(prof(X)); if (h < 1) continue;
+    for (let r = -h; r <= h; r++) { const v = (r + h) / (2 * h); let k = Math.round((1.3 - .85 * v) * 6) / 6;
+      if (X % 24 === 0) k *= .78; if (r === 0) k *= .9;
+      if (sp.stripe && Math.abs(r + Math.round(h * .4)) <= 1 && X > 30 && X < 176) { P(X, cy + r, acc); continue; }
+      if (X % 40 < 10 && r > h * .35 && r < h * .6 && h > 8) { P(X, cy + r, shade(acc, k)); continue; }
+      P(X, cy + r, shade(base, k)); }
+    if (X % 13 === 6) P(X, cy - Math.round(h * .6), shade(base, 1.5)); }
+  if (sp.win) for (let X = 50; X < 150; X += 8) for (let j = 0; j < sp.win; j++) R(X, cy - Math.round(prof(X) * .45) + j * 7, 4, 2, '#ffe9a8');
+  if (sp.cock) { const cx = sp.cock, cyy = cy - Math.round(prof(cx) * .45);
+    for (let dy = -6; dy <= 3; dy++) for (let dx = -12; dx <= 12; dx++) if ((dx / 12) ** 2 + (dy / 6) ** 2 <= 1) P(cx + dx, cyy + dy, ['#f2feff', '#b6efff', '#6cc4ec', '#3a86b8'][Math.min(3, (dy + 6) / 9 * 4 | 0)]); P(cx - 6, cyy - 4, '#fff'); }
+  for (const xt of sp.tur || []) { const ty = cy - Math.round(prof(xt));
+    for (let dx = -4; dx <= 4; dx++) for (let dy = -4; dy <= 0; dy++) if (dx * dx + dy * dy <= 16) P(xt + dx, ty + dy, shade(base, .95 - dy * .06));
+    R(xt + 2, ty - 3, 11, 2, '#2b2b33'); R(xt + 2, ty - 2, 11, 1, '#666'); }
+  if (sp.tower) { const tx = sp.tower, h = Math.round(prof(tx)); R(tx, cy - h - 12, 16, 12, shade(base, .85)); R(tx, cy - h - 12, 16, 2, shade(base, 1.25));
+    R(tx + 3, cy - h - 8, 10, 2, '#ffe9a8'); R(tx + 7, cy - h - 19, 2, 7, '#bbb'); R(tx + 5, cy - h - 19, 6, 1, '#f66'); }
+  if (sp.deck) { const h = Math.round(prof(100)); for (let X = 30; X < 176; X += 9) P(X, cy - h + 1, '#ffd166'); R(56, cy + 4, 54, 10, '#0a0a12'); R(56, cy + 4, 54, 1, '#ffd166'); for (let X = 60; X < 108; X += 6) R(X, cy + 9, 3, 4, '#2a2d34'); }
+  if (sp.bay) { const h = Math.round(prof(88)); R(70, cy + h - 6, 36, 6, '#101018'); for (let X = 70; X < 106; X += 6) R(X, cy + h - 6, 1, 6, '#444'); }
+  if (sp.rings) { for (let X = 24; X < 170; X += 22) { const h = Math.round(prof(X)); for (let r = -h; r <= h; r++) { P(X, cy + r, shade(base, .45)); P(X + 1, cy + r, shade(base, .6)); } }
+    for (let X = 30; X < 168; X += 4) { const h = Math.round(prof(X)); for (let r = -h + 5; r < h - 3; r += 6) if ((X + r) % 3 !== 1) P(X, cy + r, (X + r) % 5 ? '#ffe9a8' : '#7fe8ff'); }
+    for (const xt of [50, 96, 140]) { const ty = cy - Math.round(prof(xt)); for (let dx = -8; dx <= 8; dx++) for (let dy = -8; dy <= 0; dy++) if (dx * dx + dy * dy <= 64) P(xt + dx, ty + dy, dy < -5 ? '#b7f0c4' : '#52b788'); } }
+  if (sp.spikes) for (let X = 30; X < 170; X += 14) { const h = Math.round(prof(X)); for (const d of [-1, 1]) for (let j = 0; j < 16; j++) { const w = Math.max(0, Math.round(4 - j / 4));
+    for (let q = -w; q <= w; q++) P(X + q - (j / 3 | 0), cy + d * (h + j), shade('#3a2062', 1 - j * .02)); } }
+  if (sp.veins) { for (let X = 20; X < 180; X++) { const h = Math.round(prof(X)), yy = cy + Math.round(Math.sin(X / 9) * h * .5); P(X, yy, acc); P(X, yy + 1, shade(acc, .6)); }
+    R(168, cy - 10, 9, 4, acc); R(170, cy - 9, 3, 2, '#fff'); }
+  if (sp.legs) for (const X of [40, 125]) { const h = Math.round(prof(X)); R(X, cy + h, 3, 12, '#9aa0a6'); R(X - 5, cy + h + 12, 13, 3, '#777'); }
+  const n = sp.eng, hh = prof(20), gap = Math.max(10, Math.floor(hh * 1.7 / n)), ys = [];
+  for (let e = 0; e < n; e++) { const ey = Math.round(cy + (e - (n - 1) / 2) * gap); ys.push(ey);
+    R(2, ey - 5, 12, 10, '#454a55'); R(2, ey - 5, 12, 2, '#7b8290'); R(0, ey - 3, 4, 6, glow); R(0, ey - 1, 2, 2, '#fff'); }
+  _eng[i] = ys;
+  const d = x.getImageData(0, 0, 200, 100), a = d.data, o = new Uint8ClampedArray(a);
+  const A = (X, Y) => X < 0 || Y < 0 || X > 199 || Y > 99 ? 0 : a[(Y * 200 + X) * 4 + 3];
+  for (let Y = 0; Y < 100; Y++) for (let X = 0; X < 200; X++) if (A(X, Y) && (!A(X - 1, Y) || !A(X + 1, Y) || !A(X, Y - 1) || !A(X, Y + 1))) { const q = (Y * 200 + X) * 4; o[q] = a[q] * .3; o[q + 1] = a[q + 1] * .3; o[q + 2] = a[q + 2] * .3; }
+  d.data.set(o); x.putImageData(d, 0, 0); return c;
+}
+
+/* ---------- generated 230x140 planet / scene art (replaces your old arrival images) ---------- */
+const SCN = {
+  farport: { base: [250, 205, 80], alt: [255, 140, 30], cx: 205, cy: 70, r: 105, bands: 1, cr: 0, seed: 11, neb: '255,160,60' },
+  korr: { base: [165, 165, 172], alt: [90, 92, 105], cx: 150, cy: 72, r: 60, cr: 26, seed: 23, moon: 1, neb: '90,90,140' },
+  bazaar: { base: [70, 170, 190], alt: [40, 110, 150], cx: 150, cy: 72, r: 62, ring: 1, lights: 1, seed: 7, cr: 0 },
+  forge: { base: [210, 95, 50], alt: [90, 30, 20], cx: 150, cy: 72, r: 62, cr: 14, glow: '255,120,40', seed: 31, lights: 1 },
+  chroma: { base: [180, 100, 230], alt: [90, 60, 190], cx: 150, cy: 72, r: 62, ring: 1, bands: 1, seed: 41, neb: '200,90,220' },
+  home: { base: [90, 170, 110], alt: [50, 110, 160], cx: 150, cy: 72, r: 62, cr: 0, seed: 53, lights: 1 }
+};
+const findP = id => { for (const s of SYSTEMS) for (const p of s.planets) if (p.id === id) return p; };
+const isD = id => /^d\d+$/.test(id);
+function sceneOpts(k) {
+  if (SCN[k]) return SCN[k]; const p = findP(k); if (!p) return SCN.korr;
+  const o = { base: p.pal, alt: p.pal2, cx: 150, cy: 72, r: 62, seed: p.seed, cr: 10 };
+  if (p.type === 'belt') { o.r = 0; o.belt = 1; } if (p.type === 'gas') { o.r = 85; o.bands = 1; o.cx = 170; o.ring = 1; }
+  if (p.type === 'mobs') { o.mobs = 1; o.glow = '255,40,40'; } if (p.type === 'derelict') { o.station = 1; o.r = 50; o.cx = 175; }
+  if (p.type === 'anomaly') { o.swirl = 1; o.r = 0; } return o;
+}
+const _scn = {};
+function sceneURL(k) {
+  if (_scn[k]) return _scn[k];
+  const o = sceneOpts(k), c = document.createElement('canvas'); c.width = 230; c.height = 140; const x = c.getContext('2d'); let s = o.seed || 7;
+  const R = () => (s = (s * 16807) % 2147483647) / 2147483647, F = (a, b, w, h, col) => { x.fillStyle = col; x.fillRect(a, b, w, h); };
+  F(0, 0, 230, 140, '#03040a');
+  for (let i = 0; i < 6; i++) { x.fillStyle = `rgba(${o.neb || '70,60,150'},.07)`; const nx = R() * 230, ny = R() * 140; for (let j = 0; j < 4; j++) x.fillRect(nx - j * 6, ny - j * 4, 70 + j * 12, 24 + j * 8); }
+  for (let i = 0; i < 150; i++) F(R() * 230 | 0, R() * 140 | 0, 1, 1, ['#fff', '#9ab', '#fda', '#abf'][R() * 4 | 0]);
+  const mix = (t, l) => `rgb(${[0, 1, 2].map(j => clamp((o.base[j] * (1 - t) + o.alt[j] * t) * l, 0, 255) | 0)})`;
+  if (o.r) { const { cx, cy, r } = o, sd = o.seed;
+    for (let y = Math.max(0, cy - r - 5); y < Math.min(140, cy + r + 5); y++) for (let X = Math.max(0, cx - r - 5); X < Math.min(230, cx + r + 5); X++) { const dx = X - cx, dy = y - cy, d = Math.hypot(dx, dy);
+      if (d < r) { let l = Math.max(.12, -dx / r * .65 - dy / r * .45 + .55); l = Math.round(l * 7) / 7; const t = o.bands ? .5 + .5 * Math.sin(y * .33 + Math.sin(X * .05 + sd) * 1.4) : .5 + .5 * Math.sin(X * .11 + Math.sin(y * .07 + sd) * 2.3) * Math.cos(y * .09 + sd);
+        F(X, y, 1, 1, mix(clamp(t, 0, 1), d > r - 2 ? l * 1.35 : l)); }
+      else if (d < r + 5) { x.fillStyle = `rgba(${o.base.join(',')},${.28 * (1 - (d - r) / 5)})`; x.fillRect(X, y, 1, 1); } }
+    for (let i = 0; i < (o.cr || 0); i++) { const a = R() * 6.283, d = Math.sqrt(R()) * (r - 8), px = cx + Math.cos(a) * d, py = cy + Math.sin(a) * d, cr = 2 + R() * 7;
+      for (let yy = -cr; yy <= cr; yy++) for (let xx = -cr; xx <= cr; xx++) { const e = Math.hypot(xx, yy); if (e <= cr) { x.fillStyle = e > cr - 1.4 ? (xx + yy < 0 ? 'rgba(255,255,255,.18)' : 'rgba(0,0,0,.35)') : 'rgba(0,0,0,.22)'; x.fillRect(px + xx | 0, py + yy | 0, 1, 1); } } }
+    if (o.lights) for (let i = 0; i < 70; i++) { const dx = -r * .85 + R() * r * 1.2, dy = -r * .3 + R() * r * .9; if (Math.hypot(dx, dy) < r - 3 && dx < -r * .05) F(cx + dx | 0, cy + dy | 0, 1, 1, '#ffe27a'); }
+    if (o.glow) for (let i = 0; i < 40; i++) { const a = R() * 6.283, d = R() * (r - 6); F(cx + Math.cos(a) * d | 0, cy + Math.sin(a) * d | 0, 2, 1, `rgb(${o.glow})`); }
+    if (o.ring) for (let a = 0; a < 360; a += 1) { const q = a * Math.PI / 180; for (const [rr, col] of [[r + 22, 'rgba(225,205,255,.8)'], [r + 28, 'rgba(180,160,230,.55)']]) { const px = cx + Math.cos(q) * rr, py = cy + Math.sin(q) * rr * .18; if (py > cy || Math.abs(px - cx) > r) F(px | 0, py | 0, 1, 1, col); } } }
+  if (o.moon) { for (let y = -9; y <= 9; y++) for (let X = -9; X <= 9; X++) if (X * X + y * y <= 81) F(40 + X, 36 + y, 1, 1, `rgb(${150 - (X + y) * 3},${150 - (X + y) * 3},${160 - (X + y) * 3})`); }
+  if (o.belt) for (let i = 0; i < 90; i++) { const z = 2 + R() * 9 | 0, px = R() * 230 | 0, py = 30 + R() * 90 + Math.sin(px / 25) * 12 | 0; F(px, py, z, z - 1, `rgb(${o.base.map(v => v * (.4 + R() * .5) | 0)})`); F(px, py, z, 1, 'rgba(255,255,255,.25)'); }
+  if (o.station) { F(58, 60, 90, 8, '#8a909c'); F(58, 60, 90, 2, '#c9ced6'); F(100, 40, 8, 48, '#6c7280'); for (let k = 0; k < 4; k++) { F(70 + k * 20, 50, 14, 24, '#2b3a67'); F(70 + k * 20, 50, 14, 1, '#7aa2ff'); } for (let X = 62; X < 140; X += 10) F(X, 63, 3, 2, R() < .7 ? '#ffe27a' : '#222'); }
+  if (o.swirl) for (let i = 0; i < 700; i++) { const t = i / 700 * 22, rr = t * 4.2; F(115 + Math.cos(t) * rr | 0, 70 + Math.sin(t) * rr * .75 | 0, 2, 2, i % 3 ? `rgba(${o.base.join(',')},.9)` : `rgba(${o.alt.join(',')},.9)`); }
+  if (o.mobs) for (let i = 0; i < 6; i++) { const px = 20 + R() * 130 | 0, py = 20 + R() * 100 | 0; F(px, py, 9, 3, '#33121a'); F(px + 6, py - 2, 3, 7, '#4a1a24'); F(px + 8, py + 1, 2, 1, '#ff3030'); }
+  return _scn[k] = c.toDataURL();
+}
+
+/* ---------- market (buy low / sell high) ---------- */
+const price = k => Math.max(1, Math.round(MATS[k].base * (S.mk[k] || 1)));
+function driftMarket() { for (const k in MATS) S.mk[k] = clamp((S.mk[k] || 1) + (Math.random() - .5) * .22 + (1 - (S.mk[k] || 1)) * .08, .5, 1.7); }
+
+/* ---------- save / load ---------- */
+const SAVE_KEY = 'celestia.save.v1';
+function save() { try { if (S.step < 1) return; const s = { ...S }; ['travel', '_spr', '_amb', 'mining'].forEach(k => delete s[k]);
+  localStorage.setItem(SAVE_KEY, JSON.stringify({ S: s, SYS: SYSTEMS, PL: PLACES, MATS })); } catch (e) {} }
+function hasSave() { try { return JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return null; } }
+function loadGame() { const o = hasSave(); if (!o) return false;
+  Object.assign(S, o.S); S.mining = false; S.travel = null; SYSTEMS.length = 0; SYSTEMS.push(...o.SYS); Object.assign(PLACES, o.PL); Object.assign(MATS, o.MATS);
+  if (!['planet', 'map'].includes(S.view)) S.view = 'planet'; render(); return true; }
+
+/* ---------- sound: ambient layers that shift with location + ka-ching ---------- */
+let AC, GN, O1, O2, muted = false, mood = '';
+function audio() { if (AC) return; try { AC = new (window.AudioContext || window.webkitAudioContext)(); GN = AC.createGain(); GN.gain.value = 0; O1 = AC.createOscillator(); O2 = AC.createOscillator();
+  O1.type = 'sine'; O2.type = 'triangle'; O1.connect(GN); O2.connect(GN); GN.connect(AC.destination); O1.start(); O2.start(); setMood('calm'); } catch (e) {} }
+function setMood(m) { if (!AC || m === mood) return; mood = m; const t = AC.currentTime, f = { calm: [110, 165, .04], tense: [73, 77, .06], travel: [98, 147, .045] }[m];
+  O1.frequency.linearRampToValueAtTime(f[0], t + 2); O2.frequency.linearRampToValueAtTime(f[1], t + 2); GN.gain.linearRampToValueAtTime(muted ? 0 : f[2], t + 2); }
+function ching() { if (!AC || muted) return; [880, 1320, 1760].forEach((f, i) => { const o = AC.createOscillator(), g = AC.createGain(); o.frequency.value = f; o.type = 'square'; o.connect(g); g.connect(AC.destination);
+  const t = AC.currentTime + i * .07; g.gain.setValueAtTime(.05, t); g.gain.exponentialRampToValueAtTime(.001, t + .25); o.start(t); o.stop(t + .26); }); }
+addEventListener('pointerdown', audio, { once: true });
+
+</script>
+<script>
+/* Celestia 1.2 (part B): new planets, exploration, routes, jobs, trading, map, main loop */
+Object.assign(S, { dn: 0, draft: null, mkT: 0 });
+let lastZ = S.zeals, _pj = null, _sec = 0, exploring = false;
+SYSTEMS[0].planets.push({ id: 'forge', name: 'FORGE', r: 9, color: '#d9683a', angle: 1.9, speed: .3, orbit: 76 },
+  { id: 'chroma', name: 'CHROMA', r: 7, color: '#b06bdc', angle: 4.9, speed: .45, orbit: 40 });
+PLACES.forge = { name: 'FORGE', sub: 'SHIP UPGRADES' }; PLACES.chroma = { name: 'CHROMA DOCK', sub: 'SHIP CUSTOMS' };
+
+const CYBER = [['neural', 'NEURAL LINK', '+25% MINING SPEED', 4000], ['reflex', 'REFLEX IMPLANT', '+10% THRUST', 5000], ['optic', 'OPTIC IMPLANT', '+8% RANGE', 4500]];
+const UPG = [['engine', 'ENGINES', 'TRAVEL TIME -7%'], ['cargo', 'CARGO HOLD', '+60 CAPACITY'], ['scanner', 'SCANNERS', '+4% EXPLORE RANGE'], ['weapon', 'WEAPONS', '+12% FIGHT ODDS'], ['armor', 'DEFENSES', '-15% LOSSES']];
+const upCost = l => 2000 * Math.pow(2, l);
+const SW = ['#e63946', '#f4a261', '#ffd166', '#06d6a0', '#4cc9f0', '#7b5cff', '#f72585', '#f1f1f1', '#2b2d42'];
+const TYPES = [['rich', 'RICH MINING WORLD', .28], ['belt', 'ASTEROID BELT', .15], ['gas', 'GAS GIANT PLATFORM', .12], ['mobs', 'HOSTILE SPACE MOBS', .25], ['derelict', 'DERELICT STATION', .12], ['anomaly', 'ANOMALY ZONE', .08]];
+const POOL = [['VOIDGLASS', 120], ['EMBER SALT', 60], ['STARLEAD', 90], ['CRYO PEARL', 200], ['HELIUM-3', 70], ['AETHER DUST', 350], ['GHOST ORE', 500], ['NEUTRONITE', 800], ['PRISM SHARD', 160], ['OBSIDIAN ICE', 45]];
+const LORE = ['"THE FIRST COLONISTS NEVER LEFT. THEY JUST STOPPED SENDING MESSAGES."', '"IF YOU HEAR THIS, THE LUNARRITE VEINS RUN DEEPER THAN KORR."', '"SHIP LOG 41: THE STARS HUM WHEN THE ARK PASSES."',
+  '"DO NOT TRUST VEX. - A FRIEND"', '"THESE COORDINATES REPEAT EVERY 180 YEARS. SOMEONE IS CALLING US."', '"THE LEVIATHAN IS NOT DEAD. IT IS WAITING."'];
+const SYL = ['Vel', 'Kor', 'Zan', 'Ori', 'Tal', 'Mor', 'Xen', 'Ish', 'Dra', 'Pho', 'Lum', 'Nex', 'Cael', 'Ryn'], SY2 = ['ara', 'os', 'ith', 'um', 'eon', 'ax', 'ora', 'is', 'yx', 'ul'];
+const rname = () => (rnd(SYL) + rnd(SY2)).toUpperCase();
+const hsl = (h, s, l) => { const f = n => { const k = (n + h / 30) % 12; return Math.round(255 * (l - s * Math.min(l, 1 - l) * Math.max(-1, Math.min(k - 3, 9 - k, 1)))); }; return [f(0), f(8), f(4)]; };
+const rw = j => Math.round(j.reward * (1 + .02 * Math.min(20, S.done)) / 10) * 10;
+const loseZ = pct => { const L = Math.round(S.zeals * pct * (1 - .15 * S.up.armor)); S.zeals -= L; refreshHud(); return L; };
+function choice(text, opts) {
+  const p = $('#popup'); p.hidden = false;
+  p.innerHTML = `<div class="pt">${text}</div><div class="row">${opts.map((o, i) => `<button class="btn" data-c="${i}">${o[0]}</button>`).join('')}</div>`;
+  $$('[data-c]').forEach(b => b.onclick = () => { p.hidden = true; opts[b.dataset.c][1](); });
+}
+
+/* ---------- title: ship select with perks + continue ---------- */
+function renderName(el) {
+  const sv = hasSave();
+  el.innerHTML = `<div class="center" style="gap:8px"><h1>CELESTIA</h1><div class="sub">CHOOSE YOUR SHIP</div><div class="ships" id="sg"></div><div class="sd" id="sd"></div>
+    <input id="nm" maxlength="24" value="${randName()}"><div class="row"><button class="btn" id="rn">RANDOMIZE NAME</button><button class="btn" id="go">NEW GAME</button>${sv ? B('ct', 'CONTINUE: ' + sv.S.ship) : ''}</div></div>`;
+  const sel = i => { S.type = i; $$('.sc').forEach((e, j) => e.classList.toggle('on', j === i)); $('#sd').innerHTML = SHIPS[i].d + '<br><span class="sm">' + perkText(i) + '</span>'; };
+  SHIPS.forEach((s, i) => { const d = document.createElement('div'); d.className = 'sc'; d.append(shipSprite(i), s.n); d.onclick = () => sel(i); $('#sg').append(d); });
+  sel(S.type); $('#rn').onclick = () => $('#nm').value = randName();
+  if (sv) $('#ct').onclick = () => { loadGame(); lastZ = S.zeals; };
+  $('#go').onclick = () => { S.ship = ($('#nm').value.trim() || randName()).toUpperCase(); S.step = 1; S.view = 'planet'; S.loc = 'farport'; render();
+    popups([`WELCOME, CAPTAIN OF THE ${S.ship}. THIS IS FARPORT, A JOB HUB PLANET.`, 'JOBS COME FROM PEOPLE. SOMEONE HERE HAS ASKED FOR A PILOT. GO TO THEIR HUT.']); };
+}
+
+/* ---------- dynamic job board ---------- */
+function genJobs() {
+  S.jobs = [['EASY', 20, 45, 2.4], ['STANDARD', 45, 80, 2], ['HARD', 80, 140, 1.7], ['RUSH', 30, 60, 1.25]].map(([n, a, b, f]) => {
+    const need = a + Math.floor(Math.random() * (b - a)), per = 16 + Math.random() * 14;
+    return { tier: n, need, reward: Math.round(need * per * (n === 'RUSH' ? 1.5 : 1) / 10) * 10, limit: Math.round(need / T.mineRate * f + 25) }; });
+  S.jobT = 120;
+}
+const _qt = questText;
+questText = function () { if (S.step >= 11 && S.job && !S.job.done) return `JOB: MINE ${S.job.need} - ${Math.ceil(S.job.left)}S LEFT`; return _qt(); };
+const _hut = renderHut;
+renderHut = function (el) {
+  _hut(el); if (S.step < 11) return;
+  const FL = ['"NEW FACE? DON\'T SCRATCH THE ORE."', '"YOU AGAIN! GOOD, I NEED A RELIABLE PILOT."', '"THE LEGEND OF FARPORT RETURNS!"'];
+  $('.box').innerHTML += `<br><span class="sm">${FL[S.done < 1 ? 0 : S.done < 5 ? 1 : 2]} (${S.done} JOBS DONE: +${Math.min(40, S.done * 2)}% PAY)</span>`;
+  if (S.job) return;
+  $$('[data-j]').forEach(b => b.remove()); const row = $('.row');
+  S.jobs.slice().reverse().forEach(j => { const b = document.createElement('button'); b.className = 'btn'; b.style.fontSize = '12px';
+    b.textContent = `${j.tier}: MINE ${j.need} - ${rw(j)} Z - ${j.limit}S`;
+    b.onclick = () => { S.job = { need: j.need, reward: rw(j), done: false, left: j.limit }; S.jobs = S.jobs.filter(q => q !== j); S.need = j.need; S.ore = 0; S.view = 'planet'; render();
+      popup(`JOB ACCEPTED: MINE ${j.need} LUNARRITE ON KORR WITHIN ${j.limit} SECONDS. PAYOUT: ${rw(j)} Z.`); };
+    row.prepend(b); });
+};
+
+/* ---------- Forge (upgrades) / Chroma (customs) / Bazaar (shop) ---------- */
+const goMap = () => { S.view = 'map'; render(); };
+function renderForge(el) {
+  el.innerHTML = `<img class="bg" src="${sceneURL('forge')}">${hud()}<div class="box tl">FORGE<br><span class="sm">SHIP UPGRADES</span></div><div class="shop box" id="sh"></div><div class="shop2 box" id="sh2"></div><div class="actions">${B('map', 'OPEN MAP')}</div>`;
+  $('#map').onclick = goMap; forgeUI();
+}
+function forgeUI() {
+  $('#sh').innerHTML = '<b>UPGRADES</b>' + UPG.map(u => { const l = S.up[u[0]]; return `<div class="ln"><span>${u[1]} <span class="sm">LV ${l}/5 - ${u[2]}</span></span><button class="btn" data-u="${u[0]}" ${l >= 5 || S.zeals < upCost(l) ? 'disabled' : ''}>${l >= 5 ? 'MAX' : upCost(l).toLocaleString() + ' Z'}</button></div>`; }).join('');
+  const s = SHIPS[S.type]; $('#sh2').innerHTML = `<b>${s.n}</b>`; const cv = shipSprite(S.type, S.paint); cv.style.cssText = 'width:380px;height:190px'; $('#sh2').append(cv);
+  $('#sh2').insertAdjacentHTML('beforeend', `<div class="sm">TRAVEL x${travelMult().toFixed(2)} | MINING x${mineMult().toFixed(2)} | RANGE ${Math.round(rangeP() * 100)}% | THRUST ${Math.round(thrustP() * 100)}%<br>CARGO ${cargoCap()} | WEAPONS LV ${S.up.weapon} | DEFENSES LV ${S.up.armor}</div>`);
+  $$('[data-u]').forEach(b => b.onclick = () => { const k = b.dataset.u, c = upCost(S.up[k]); if (S.zeals >= c && S.up[k] < 5) { S.zeals -= c; S.up[k]++; refreshHud(); forgeUI(); save(); } });
+}
+function renderChroma(el) {
+  S.draft = S.draft || { ...S.paint };
+  el.innerHTML = `<img class="bg" src="${sceneURL('chroma')}">${hud()}<div class="box tl">CHROMA DOCK<br><span class="sm">SHIP CUSTOMS</span></div><div class="shop box" id="sh"></div><div class="shop2 box" id="sh2"></div><div class="actions">${B('map', 'OPEN MAP')}</div>`;
+  $('#map').onclick = () => { S.draft = null; goMap(); }; chromaUI();
+}
+function chromaUI() {
+  const d = S.draft, row = (k, t) => `<div class="sm">${t}</div><div class="row" style="justify-content:flex-start;gap:6px"><button class="sw ${!d[k] ? 'on' : ''}" data-k="${k}" data-v="" style="background:#555;font-size:8px;color:#fff">DEF</button>` +
+    SW.map(c => `<button class="sw ${d[k] === c ? 'on' : ''}" data-k="${k}" data-v="${c}" style="background:${c}"></button>`).join('') + '</div>';
+  $('#sh').innerHTML = '<b>PAINT YOUR SHIP</b>' + row('hull', 'HULL') + row('accent', 'ACCENT') + row('glow', 'ENGINE GLOW') + `<button class="btn" id="ap">${S.custom ? 'APPLY (FREE)' : 'UNLOCK + APPLY: 5,000 Z'}</button>`;
+  $('#sh2').innerHTML = '<b>PREVIEW</b>'; const cv = shipSprite(S.type, d); cv.style.cssText = 'width:380px;height:190px'; $('#sh2').append(cv);
+  $$('.sw').forEach(b => b.onclick = () => { d[b.dataset.k] = b.dataset.v; chromaUI(); });
+  $('#ap').onclick = () => { if (!S.custom) { if (S.zeals < 5000) { toast('NEED 5,000 Z'); return; } S.zeals -= 5000; S.custom = true; }
+    S.paint = { ...d }; refreshHud(); save(); chromaUI(); popup('YOUR SHIP HAS A FRESH NEW LOOK!'); };
+}
+function shopUI() {
+  if (!$('#sh')) return; if (!$('#sh2')) { const d = document.createElement('div'); d.id = 'sh2'; d.className = 'shop2 box'; $('#screen').append(d); }
+  $('#sh').innerHTML = '<b>BUY</b>' + ITEMS.map(i => `<div class="ln"><span>${i[1]} <span class="sm">${i[2]} Z (HAVE ${S.pods[i[0]]})</span></span><button class="btn" data-b="${i[0]}" ${S.zeals < i[2] ? 'disabled' : ''}>BUY</button></div>`).join('') +
+    '<b>CYBERWARE</b>' + CYBER.map(c => `<div class="ln"><span>${c[1]} <span class="sm">${c[2]}</span></span><button class="btn" data-cy="${c[0]}" ${S.cyber[c[0]] || S.zeals < c[3] ? 'disabled' : ''}>${S.cyber[c[0]] ? 'OWNED' : c[3] + ' Z'}</button></div>`).join('');
+  const keys = Object.keys(MATS).filter(k => S.inv[k] > 0), total = keys.reduce((a, k) => a + S.inv[k] * price(k), 0);
+  $('#sh2').innerHTML = '<b>SELL (PRICES CHANGE!)</b>' + (keys.length ? keys.map(k => { const up = (S.mk[k] || 1) >= 1;
+    return `<div class="ln sm"><span>${MATS[k].n}: ${S.inv[k]} x ${price(k)} Z <b>${up ? '&#9650;' : '&#9660;'}</b></span><button class="btn" data-s="${k}">SELL</button></div>`; }).join('') : '<span class="sm">NOTHING TO SELL</span>') +
+    `<div class="ln"><span>TOTAL ${total} Z</span><button class="btn" id="sell" ${total ? '' : 'disabled'}>SELL ALL</button></div>`;
+  $$('[data-b]').forEach(b => b.onclick = () => { const it = ITEMS.find(i => i[0] === b.dataset.b); if (S.zeals >= it[2]) { S.zeals -= it[2]; S.pods[it[0]]++; refreshHud(); shopUI(); } });
+  $$('[data-cy]').forEach(b => b.onclick = () => { const c = CYBER.find(i => i[0] === b.dataset.cy); if (S.zeals >= c[3]) { S.zeals -= c[3]; S.cyber[c[0]] = 1; refreshHud(); shopUI(); toast(c[1] + ' INSTALLED'); save(); } });
+  const sellK = k => { const n = S.inv[k], g = n * price(k); S.zeals += g; S.inv[k] = 0; S.mk[k] = Math.max(.4, (S.mk[k] || 1) - .02 * n); return g; };
+  $$('[data-s]').forEach(b => b.onclick = () => { toast('+' + sellK(b.dataset.s) + ' Z'); refreshHud(); shopUI(); });
+  $('#sell').onclick = () => { toast('SOLD FOR ' + keys.reduce((a, k) => a + sellK(k), 0) + ' Z'); refreshHud(); shopUI(); };
+}
+
+/* ---------- exploration: new systems with planets ---------- */
+function pickType() { let r = Math.random(); for (const t of TYPES) { if (r < t[2]) return t; r -= t[2]; } return TYPES[0]; }
+function genSystem() {
+  const n = ++S.dn, t = pickType(), pl = rnd(POOL), far = 20 + Math.floor(Math.random() * 161), h = t[0] === 'mobs' ? Math.random() * 20 : Math.random() * 360;
+  const pal = hsl(h, .55, .55), pal2 = hsl((h + 40) % 360, .6, .3), mk = 'm' + n, ang = Math.random() * 6.283, dist = 420 + far * 3.2, id = 'd' + n;
+  MATS[mk] = { n: pl[0], base: Math.round(pl[1] * (t[0] === 'anomaly' ? 1.6 : 1)) };
+  const p = { id, name: rname(), r: 5 + Math.random() * 5, color: `rgb(${pal})`, angle: Math.random() * 6.283, speed: .2 + Math.random() * .4, orbit: 36 + Math.random() * 40, type: t[0], mat: mk,
+    lvl: 1 + Math.random() * 5 | 0, mobName: rnd(['VOID WASPS', 'PIRATE RAIDERS', 'CRYSTAL HOUNDS', 'RUST DRONES', 'NEBULA LEECHES']), pal, pal2, seed: 100 + n * 13, looted: false, visited: false, cd: 0 };
+  const sys = { id: 's' + n, name: rname() + ' SYSTEM', x: Math.cos(ang) * dist, y: Math.sin(ang) * dist, sun: 10 + Math.random() * 8, col: rnd(['#f5a623', '#ff6b6b', '#7fdcff', '#fff3b0', '#c77dff']), far, discovered: true, planets: [p] };
+  SYSTEMS.push(sys); PLACES[id] = { name: p.name, sub: t[1] }; save(); return { sys, p, t };
+}
+function scanAnim(ms, cb) {
+  const x = $('#fx').getContext('2d'), t0 = performance.now();
+  (function f(n) { const t = (n - t0) / ms; x.clearRect(0, 0, 920, 560); if (t >= 1) return cb();
+    for (let k = 0; k < 3; k++) { const r = ((t * 1.4 + k * .33) % 1) * 300; x.fillStyle = `rgba(255,255,255,${1 - r / 300})`; for (let a = 0; a < 360; a += 3) { const q = a * Math.PI / 180; x.fillRect(Math.round((460 + Math.cos(q) * r) / 4) * 4, Math.round((280 + Math.sin(q) * r) / 4) * 4, 4, 4); } }
+    x.fillStyle = '#fff'; x.font = '700 20px Ubuntu'; x.textAlign = 'center'; x.fillText('SCANNING THE DARK...', 460, 70); requestAnimationFrame(f); })(t0);
+}
+function explore() {
+  if (exploring) return; if (S.zeals < 150) { toast('NEED 150 Z FOR FUEL'); return; }
+  S.zeals -= 150; refreshHud(); exploring = true; scanAnim(2500, () => { exploring = false; resolveExplore(); });
+}
+function hostile(text, lp) {
+  choice(text, [[`RUN (${Math.round(thrustP() * 100)}% THRUST)`, () => { if (Math.random() < thrustP()) popup('YOU BURN HARD AND ESCAPE!'); else popup(`THEY CAUGHT YOU AND TOOK ${loseZ(lp)} Z.`); }],
+    ['FIGHT', () => { const w = clamp(.35 + .12 * S.up.weapon + .03 * S.up.armor + SHIPS[S.type].cmb, .1, .85);
+      if (Math.random() < w) { const g = 400 + Math.random() * 1100 | 0; S.zeals += g; refreshHud(); popup(`VICTORY! YOU SALVAGED ${g} Z FROM THE WRECKS.`); } else popup(`YOU LOST THE FIGHT AND ${loseZ(lp * 1.2)} Z.`); }]]);
+}
+function resolveExplore() {
+  const r = Math.random();
+  if (r < .15) return hostile('HOSTILE TERRITORY! AN ARMED PATROL LOCKS ONTO YOUR SHIP.', .1);
+  if ((r - .15) / .85 < rangeP()) { const { sys, p, t } = genSystem(), secs = Math.round(sys.far * travelMult());
+    return choice(`PLANET FOUND: ${p.name} (${t[1]}) IN THE ${sys.name}. IT IS ${sys.far} UNITS AWAY: ABOUT ${secs} SECONDS FOR YOUR SHIP. IT WAS ADDED TO YOUR MAP.`, [['TRAVEL NOW', () => startTravel(p.id)], ['LATER', () => {}]]); }
+  if (Math.random() < .12) { const l = rnd(LORE), g = 250 + Math.random() * 650 | 0; S.zeals += g; S.lore.push(l); refreshHud(); return popups(['GHOST SIGNAL DETECTED...', `YOU DECODE IT: ${l}`, `A FORGOTTEN BEACON PAYS OUT ${g} Z.`]); }
+  popup(rnd(['NOTHING BUT EMPTY DARK. THE SCANNERS FOUND NOTHING THIS TIME.', 'ONLY STATIC AND STARDUST. TRY AGAIN.', 'A QUIET SECTOR. NOTHING OF INTEREST.']));
+}
+
+/* ---------- discovered planets ---------- */
+function renderD(el) {
+  const p = findP(S.loc), T0 = TYPES.find(t => t[0] === p.type); let acts = '', mid = '';
+  if (p.type !== 'mobs' && p.type !== 'derelict') { mid = `<div class="mid box"><div>${MATS[p.mat].n} - ${price(p.mat)} Z EACH</div><div id="cg">${cargoUsed()} / ${cargoCap()} CARGO</div><div class="bar"><div id="bar" style="width:${cargoUsed() / cargoCap() * 100}%"></div></div></div>`; acts += B('dm', 'START MINING'); }
+  if (p.type === 'rich') acts += B('st', 'STEAL CARGO'); if (p.type === 'mobs') acts += B('hu', `HUNT ${p.mobName} (LV ${p.lvl})`); if (p.type === 'derelict' && !p.looted) acts += B('sa', 'SALVAGE &amp; SCAN');
+  acts += B('map', 'OPEN MAP');
+  el.innerHTML = `<img class="bg" src="${sceneURL(p.id)}">${hud()}${mid}<div class="box tl">${p.name}<br><span class="sm">${T0[1]}${p.type === 'mobs' ? ' - LV ' + p.lvl : ''}</span></div><div class="actions">${acts}</div>`;
+  const on = (id, f) => { const b = $('#' + id); if (b) b.onclick = f; };
+  on('map', goMap); on('dm', () => { S.mining = !S.mining; $('#dm').textContent = S.mining ? 'STOP MINING' : 'START MINING'; }); on('st', () => steal(p)); on('hu', () => hunt(p)); on('sa', () => salvage(p));
+  if (!p.visited) { p.visited = true; popup({ rich: 'RICH IN ' + MATS[p.mat].n + '. MINE IT, OR TRY TO STEAL FROM THE LOCALS (RISKY: YOUR THRUST DECIDES IF YOU ESCAPE).', belt: 'AN ASTEROID BELT. MINE THE ROCKS FOR ' + MATS[p.mat].n + '.',
+    gas: 'A GAS GIANT WITH FLOATING PLATFORMS. SKIM IT FOR ' + MATS[p.mat].n + '.', mobs: `DANGER! ${p.mobName} SWARM HERE. HUNT THEM FOR ZEALS. BETTER WEAPONS MEAN BETTER ODDS.`, derelict: 'A DEAD STATION DRIFTS HERE. SALVAGE IT FOR LOOT AND LOGS.', anomaly: 'SPACE BENDS STRANGELY. RARE ' + MATS[p.mat].n + ' FORMS IN THE WARP.' }[p.type]); }
+}
+function mineD(dt) {
+  const p = findP(S.loc); if (!p || !p.mat) return;
+  if (cargoUsed() >= cargoCap()) { S.mining = false; const b = $('#dm'); if (b) b.textContent = 'START MINING'; toast('CARGO FULL'); return; }
+  S.fr += 1.1 * mineMult() * (p.type === 'belt' ? .8 : p.type === 'anomaly' ? .6 : 1) * dt;
+  while (S.fr >= 1 && cargoUsed() < cargoCap()) { S.fr -= 1; S.inv[p.mat] = (S.inv[p.mat] || 0) + 1; }
+  const cg = $('#cg'); if (cg) { cg.textContent = `${cargoUsed()} / ${cargoCap()} CARGO (${S.inv[p.mat] || 0} ${MATS[p.mat].n})`; $('#bar').style.width = cargoUsed() / cargoCap() * 100 + '%'; }
+}
+function hunt(p) {
+  if (S.cd > 0) { toast('SYSTEMS COOLING DOWN'); return; } S.cd = 4;
+  const w = clamp(.55 + .12 * S.up.weapon + .03 * S.up.armor + SHIPS[S.type].cmb - .1 * p.lvl, .08, .92);
+  if (Math.random() < w) { const g = p.lvl * 350 + Math.random() * 300 | 0; S.zeals += g; let t = `YOU DESTROYED THE ${p.mobName}! +${g} Z`;
+    if (Math.random() < .3) { const n = 2 + Math.random() * 4 | 0; S.inv[p.mat] = (S.inv[p.mat] || 0) + n; t += ` AND SALVAGED ${n} ${MATS[p.mat].n}`; } refreshHud(); toast('+' + g + ' Z'); popup(t); }
+  else popup(`THE ${p.mobName} DRIVE YOU OFF. REPAIRS COST ${loseZ(.06)} Z.`);
+}
+function steal(p) {
+  if (p.cd > Date.now()) { toast('GUARDS ARE WATCHING. WAIT A MOMENT'); return; } p.cd = Date.now() + 30000;
+  const loot = () => { const n = Math.min(15 + Math.random() * 25 | 0, Math.max(0, cargoCap() - cargoUsed())); S.inv[p.mat] = (S.inv[p.mat] || 0) + n; return n; };
+  if (Math.random() < .55) choice('ALARM! SECURITY SHIPS SCRAMBLE.', [[`RUN WITH THE LOOT (${Math.round(thrustP() * 100)}% THRUST)`, () => { if (Math.random() < thrustP()) popup(`YOU ESCAPED WITH ${loot()} ${MATS[p.mat].n}!`); else popup(`CAUGHT! FINED ${loseZ(.15)} Z AND THE LOOT IS GONE.`); }]]);
+  else popup(`SILENT AS A GHOST. YOU TOOK ${loot()} ${MATS[p.mat].n}.`);
+}
+function salvage(p) {
+  p.looted = true; const g = 1500 + Math.random() * 3500 | 0, l = rnd(LORE); S.zeals += g; MATS.core = MATS.core || { n: 'ANCIENT CORE', base: 900 }; S.inv.core = (S.inv.core || 0) + 1; S.lore.push(l); refreshHud(); render();
+  popups([`SALVAGED ${g} Z AND AN ANCIENT CORE.`, 'LOG RECOVERED: ' + l]);
+}
+
+/* ---------- travel: routes with risk, long exploration trips, generated animation ---------- */
+const baseDur = (a, b) => { const sa = sysOf(a), sb = sysOf(b); return sa === sb ? 2 : Math.max(sa.far || 0, sb.far || 0) || T.travelSeconds; };
+function startTravel(to, mode) {
+  const dur = Math.max(1, baseDur(S.loc, to) * travelMult() * (mode === 'safe' ? 1.6 : 1));
+  S.travel = { to, t: 0, dur, sp: [], risky: mode === 'short' }; S.view = 'travel'; render();
+}
+function routeEvent() {
+  const ev = Math.random() * 3 | 0;
+  if (ev === 0) popup(Math.random() < thrustP() ? 'ASTEROID FIELD! YOU THREADED THROUGH WITH A STEADY HAND.' : `ASTEROID FIELD! HULL DAMAGE COSTS ${loseZ(.05)} Z IN REPAIRS.`);
+  else if (ev === 1) hostile('PIRATE PATROL ON THE SHORT ROUTE! THEY DEMAND YOUR ZEALS.', .08);
+  else popup(Math.random() < .18 * S.up.armor ? 'SOLAR FLARE! YOUR DEFENSES ABSORB THE BLAST.' : `SOLAR FLARE! SCORCHED SYSTEMS COST ${loseZ(.04)} Z.`);
+}
+const _arr = arrive;
+arrive = function (d) { const risky = S.travel && S.travel.risky; _arr(d); if (risky && Math.random() < .45) routeEvent(); };
+function tickTravel(dt) {
+  const tr = S.travel; tr.t += dt; const warp = tr.t < T.warpSeconds, rem = Math.max(0, tr.dur - Math.max(0, tr.t - T.warpSeconds)), tt = $('#tt'); if (!tt) return;
+  tt.textContent = warp ? 'ENGAGING DRIVES...' : `TRAVELLING TO ${PLACES[tr.to].name}  -  ${rem >= 60 ? Math.floor(rem / 60) + 'M ' : ''}${Math.ceil(rem % 60)}S REMAINING`;
+  const key = S.type + JSON.stringify(S.paint); if (!S._spr || S._spr.k !== key) S._spr = { k: key, c: shipSprite(S.type, S.paint) };
+  const c = $('#tc').getContext('2d'), sc = 3; c.imageSmoothingEnabled = false; c.fillStyle = '#02030a'; c.fillRect(0, 0, 920, 560);
+  for (let i = 0; i < 6; i++) { c.fillStyle = 'rgba(90,60,160,.14)'; const nx = ((i * 211 - tr.t * 20) % 1100 + 1100) % 1100 - 100; c.fillRect(Math.round(nx / 8) * 8, 60 + i * 80, 160 + i * 20, 48); }
+  for (const s of stars) { s.x -= s.s * (warp ? 1100 : 220) * dt; if (s.x < -80) { s.x = 940; s.y = Math.random() * 560; }
+    const z = s.s < .6 ? 4 : s.s < 1 ? 8 : 12; c.fillStyle = s.s < .6 ? '#667' : s.s < 1 ? '#bbb' : '#fff'; c.fillRect(Math.round(s.x / 4) * 4, Math.round(s.y / 4) * 4, warp ? z * 4 : z, 4); }
+  const bob = Math.round(Math.sin(tr.t * 3) * 2) * 3, sx = 130, sy = 130 + bob, glow = S.paint.glow || '#ff9d3c', pal = ['#fff', '#fff3b0', '#ffd24a', glow, '#ff5a2a', '#a02a1a', '#601810'];
+  shipEngY(S.type).forEach(ey => { const fy = sy + ey * sc, len = 9 + (Math.random() * 6 | 0) + (warp ? 6 : 0);
+    for (let k = 0; k < len; k++) { c.fillStyle = pal[Math.min(6, k >> 1)]; const h = k < 4 ? 12 : k < 8 ? 9 : 5; c.fillRect(sx - (k + 1) * 6, fy - h / 2, 6, h); }
+    tr.sp.push({ x: sx, y: fy, vx: -(250 + Math.random() * 300), vy: (Math.random() - .5) * 60, l: 1 }); });
+  tr.sp = tr.sp.filter(p => (p.l -= dt * 1.6) > 0); for (const p of tr.sp) { p.x += p.vx * dt; p.y += p.vy * dt; c.fillStyle = p.l > .5 ? '#ffb347' : '#ff5a2a'; c.fillRect(Math.round(p.x / 4) * 4, Math.round(p.y / 4) * 4, 4, 4); }
+  c.drawImage(S._spr.c, sx, sy, 200 * sc, 100 * sc);
+  if (tr.t >= T.warpSeconds + tr.dur) arrive(tr.to);
+}
+const _rp = renderPlanet;
+renderPlanet = function (el) { const L = S.loc; if (L === 'forge') return renderForge(el); if (L === 'chroma') return renderChroma(el); if (isD(L)) return renderD(el); return _rp(el); };
+
+/* ---------- map ---------- */
+const _rm = renderMap;
+renderMap = function (el) { _rm(el); $('.actions').insertAdjacentHTML('beforeend', B('ex', 'EXPLORE (8 FUEL)')); $('#ex').onclick = explore; $('.banner').textContent = 'USE EXPLORE TO DISCOVER NEW SYSTEMS'; };
+function panel() {
+  const el = $('#mp'); if (!el) return; const p = M.sel; if (!p) { el.innerHTML = '<div class="box sm">CLICK A PLANET</div>'; return; }
+  const here = S.loc === p.id, sy = sysOf(p.id), same = sysOf(S.loc) === sy, d = Math.round(baseDur(S.loc, p.id) * travelMult());
+  const tp = p.type ? TYPES.find(t => t[0] === p.type)[1] : (PLACES[p.id] || {}).sub || '';
+  el.innerHTML = `<div class="box"><b>${p.name}</b><br><span class="sm">${sy.name}<br>${tp}<br>${here ? 'YOU ARE HERE' : same ? 'SHORT HOP: ' + d + ' S' : 'ROUTE TIME: ' + d + ' S'}</span></div>` +
+    (here ? B('pgo', 'LAND') : same ? B('pgo', 'TRAVEL') : B('pgs', `SAFE ROUTE (${Math.round(d * 1.6)} S)`) + B('pgr', `SHORT ROUTE (${d} S) - RISKY`));
+  const on = (id, f) => { const b = $('#' + id); if (b) b.onclick = f; };
+  on('pgo', () => here ? (S.view = 'planet', render()) : startTravel(p.id)); on('pgs', () => startTravel(p.id, 'safe')); on('pgr', () => startTravel(p.id, 'short'));
+}
+function drawMap() {
+  const c = $('#mc'); if (!c) return; const x = c.getContext('2d'), t = performance.now() / 1000;
+  x.fillStyle = '#000'; x.fillRect(0, 0, 920, 560); x.fillStyle = '#444'; for (let i = 0; i < 70; i++) x.fillRect((i * 137) % 920, (i * 71) % 560, 2, 2);
+  const a = proj(SYSTEMS[0].x, SYSTEMS[0].y), b = proj(SYSTEMS[1].x, SYSTEMS[1].y);
+  x.strokeStyle = '#444'; x.setLineDash([6, 8]); x.beginPath(); x.moveTo(a.x, a.y); x.lineTo(b.x, b.y); x.stroke(); x.setLineDash([]);
+  x.font = '600 13px Ubuntu, sans-serif'; x.textAlign = 'center';
+  for (const s of SYSTEMS) { const c0 = proj(s.x, s.y); let mo = 0;
+    for (const p of s.planets) if (p.id !== 'home' || S.planet) { mo = Math.max(mo, p.orbit); x.strokeStyle = '#999'; x.lineWidth = 2; x.beginPath(); x.arc(c0.x, c0.y, p.orbit, 0, 6.283); x.stroke(); }
+    x.fillStyle = s.col || '#f5a623'; x.beginPath(); x.arc(c0.x, c0.y, s.sun, 0, 6.283); x.fill(); x.fillStyle = '#fff'; x.fillText(s.name, c0.x, c0.y + mo + 26); }
+  for (const { s, p } of mapPlanets()) { const q = planetPos(s, p, t);
+    x.fillStyle = p.color; x.beginPath(); x.arc(q.x, q.y, p.r, 0, 6.283); x.fill();
+    if (M.sel === p) { x.strokeStyle = '#fff'; x.strokeRect(q.x - p.r - 6, q.y - p.r - 6, p.r * 2 + 12, p.r * 2 + 12); }
+    x.fillStyle = '#fff'; x.fillText(p.name, q.x, q.y + p.r + 16); if (S.loc === p.id) x.fillText('YOU', q.x, q.y - p.r - 10); }
+}
+
+/* ---------- main loop: mining, colony, market, jobs, autosave ---------- */
+function produce(dt) {
+  S.sv += dt; if (S.sv > 4) { S.sv = 0; save(); }
+  S.mkT += dt; if (S.mkT > 15) { S.mkT = 0; driftMarket(); if (S.view === 'planet' && S.loc === 'bazaar') shopUI(); }
+  if (S.step >= 11) { if (!S.jobs.length) genJobs(); S.jobT -= dt; if (S.jobT <= 0) genJobs(); }
+  if (S.cd > 0) S.cd -= dt;
+  if (S.job && !S.job.done && S.step >= 11) { S.job.left -= dt; if (S.job.left <= 0) { S.job = null; S.mining = false; S.ore = 0; refreshHud(); popup('JOB EXPIRED! YOU RAN OUT OF TIME.'); if (S.view === 'planet') render(); } }
+  if (_pj && _pj.done && !S.job) S.done++; _pj = S.job;
+  if (S.zeals - lastZ >= 200) ching(); lastZ = S.zeals;
+  _sec += dt; if (_sec >= 1) { _sec = 0; if (S.job && !S.job.done) refreshHud(); const p = isD(S.loc) && findP(S.loc); setMood(S.view === 'travel' ? 'travel' : p && p.type === 'mobs' ? 'tense' : 'calm'); }
+  if (S.caves && S.homes) { S.acc += dt; if (S.acc >= 10) { S.acc = 0; const rolls = Math.ceil(S.homes / 3) + S.farms, got = {};
+    for (let i = 0; i < rolls; i++) { let n = Math.random() * 100, r = RES[0]; for (const q of RES) { if (n < q.w) { r = q; break; } n -= q.w; } S.inv[r.k]++; got[r.n] = (got[r.n] || 0) + 1; }
+    toast('RESIDENTS FOUND: ' + Object.entries(got).map(([k, v]) => `+${v} ${k}`).join(', ')); if (S.view === 'planet' && S.loc === 'home') colonyInfo(); if (S.view === 'planet' && S.loc === 'bazaar') shopUI(); } }
+}
+function tick(now) {
+  const dt = Math.min(0.25, (now - last) / 1000); last = now;
+  if (playable) {
+    if (S.view === 'travel' && S.travel) tickTravel(dt);
+    else if (S.view === 'map') drawMap();
+    else if (S.view === 'planet') {
+      if (S.mining && S.loc === 'korr' && canMine()) { S.ore = Math.min(S.need, S.ore + T.mineRate * mineMult() * dt); updateOre(); if (S.ore >= S.need) finishMine(); }
+      else if (S.mining && isD(S.loc)) mineD(dt);
+      else if (S.loc === 'home' && S.cleaned) drawColony();
+    }
+    produce(dt);
+  }
+  requestAnimationFrame(tick);
+}
+
+</script>
+<script>
+/* Celestia 1.3 (part A): realistic ships (400x200), hi-res scenes, portraits, interiors, title screen */
+const cvs = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+const hx = s => { const n = parseInt(s.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
+const sh2 = (a, k) => a.map(v => clamp(Math.round(v * k), 0, 255));
+const rs = a => `rgb(${a[0]},${a[1]},${a[2]})`;
+const hh = (a, b) => { let h = Math.imul(a | 0, 374761393) ^ Math.imul(b | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) % 1000 / 1000; };
+
+/* ---------- ships: muted real-world palettes, plated hulls, ion engines ---------- */
+const PAL = [['#aab4c0', '#d9822b'], ['#7d8794', '#b3392f'], ['#b9b2a0', '#3e6b5a'], ['#6f6a5c', '#c9a227'], ['#c9ced6', '#c1121f'], ['#4d5360', '#8c1b1b'],
+  ['#8a9a8e', '#e6c44a'], ['#d7d3c8', '#e8742a'], ['#9aa3ad', '#2b6cb0'], ['#c8cdd2', '#2f7d8a'], ['#3b3f4a', '#a31621']];
+SPEC.forEach((s, i) => { s.c = PAL[i][0]; s.a = PAL[i][1]; });
+function shipSprite(i, paint) {
+  paint = paint || {}; const key = i + '|' + (paint.hull || '') + (paint.accent || '') + (paint.glow || '');
+  if (!_ss[key]) _ss[key] = buildShip(i, paint);
+  const c = cvs(400, 200); c.getContext('2d').drawImage(_ss[key], 0, 0); return c;
+}
+function buildShip(i, pt) {
+  const sp = SPEC[i], K = 2, base = hx(pt.hull || sp.c), acc = hx(pt.accent || sp.a), glow = pt.glow || '#8fd3ff', cy = 100, accS = rs(acc);
+  const c = cvs(400, 200), x = c.getContext('2d'), buf = x.createImageData(400, 200), D = buf.data;
+  const P = (X, Y, a) => { if (X < 0 || Y < 0 || X > 399 || Y > 199) return; const q = (Y * 400 + X) * 4; D[q] = a[0]; D[q + 1] = a[1]; D[q + 2] = a[2]; D[q + 3] = 255; };
+  const R = (a, b, w, h, col) => { x.fillStyle = col; x.fillRect(Math.round(a * K), Math.round(b * K), Math.max(1, Math.round(w * K)), Math.max(1, Math.round(h * K))); };
+  const prof = X => { const p = sp.p; if (X < p[0][0] || X > p[p.length - 1][0]) return 0; for (let k = 0; k < p.length - 1; k++) if (X <= p[k + 1][0]) { const t = (X - p[k][0]) / (p[k + 1][0] - p[k][0]); return p[k][1] + (p[k + 1][1] - p[k][1]) * t; } return 0; };
+  const inP = (poly, X, Y) => { let q = false; for (let a = 0, b = poly.length - 1; a < poly.length; b = a++) { const [xi, yi] = poly[a], [xj, yj] = poly[b]; if ((yi > Y) !== (yj > Y) && X < (xj - xi) * (Y - yi) / (yj - yi) + xi) q = !q; } return q; };
+  for (const poly of sp.w) for (let X = 0; X < 400; X++) for (let Y = 1; Y < 100; Y++) if (inP(poly, X / K, Y / K)) {
+    const outer = !inP(poly, X / K, (Y + 1) / K), lead = !inP(poly, (X - 1) / K, Y / K);
+    for (const d of [-1, 1]) { let k = (d < 0 ? 1 : .66) - Y / 360 + (hh(X >> 4, Y >> 3) - .5) * .12; if (X % 22 === 0 || (Y + (X >> 1)) % 26 === 0) k *= .8; if (lead) k *= 1.12; P(X, cy + d * Y, outer ? sh2(acc, .9 * (d < 0 ? 1 : .7)) : sh2(base, k)); } }
+  for (let X = 0; X < 400; X++) { const h = Math.round(prof(X / K) * K); if (h < 1) continue;
+    for (let r = -h; r <= h; r++) { const v = (r + h) / (2 * h); let k = Math.round((1.28 - .8 * v) * 8) / 8; k *= .93 + hh(X / 20 | 0, ((r + h) / 12 | 0) + i * 7) * .14;
+      if (X % 20 === 0 || (r + h) % 12 === 0) k *= .8; k += (hh(X, r) - .5) * .05; let col = sh2(base, k);
+      if (sp.stripe && Math.abs(r + Math.round(h * .4)) <= 2 && X > 60 && X < 352) col = sh2(acc, k);
+      else if (X % 80 < 18 && r > h * .35 && r < h * .62 && h > 16) col = sh2(acc, k * .95);
+      P(X, cy + r, col); } }
+  x.putImageData(buf, 0, 0);
+  for (let X = 24; X < 176; X += 7) if (hh(X, i * 3) > .62) { const h = prof(X); R(X, 50 - h - 1 - (hh(X, 9) * 3 | 0), 2 + (hh(X, 2) * 4 | 0), 1.5, rs(sh2(base, .6))); }
+  if (sp.win) for (let X = 50; X < 150; X += 8) for (let j = 0; j < sp.win; j++) R(X, 50 - Math.round(prof(X) * .45) + j * 7, 3, 1, '#ffe9a8');
+  if (sp.cock) { const cx = sp.cock * K, cyy = (50 - Math.round(prof(sp.cock) * .45)) * K;
+    for (let dy = -11; dy <= 6; dy++) for (let dx = -24; dx <= 24; dx++) if ((dx / 24) ** 2 + (dy / 11) ** 2 <= 1) { const t = (dy + 11) / 17; x.fillStyle = (dx + dy * 2 > -9 && dx + dy * 2 < -4) ? '#fff' : ['#d6f4ff', '#8fd0ea', '#4a95bd', '#2a5f85'][Math.min(3, t * 4 | 0)]; x.fillRect(cx + dx, cyy + dy, 1, 1); } }
+  for (const xt of sp.tur || []) { const ty = 50 - Math.round(prof(xt)); R(xt - 3, ty - 2, 6, 2, rs(sh2(base, .8))); R(xt - 2, ty - 4, 4, 2, rs(sh2(base, 1))); R(xt + 1, ty - 3.5, 9, 1, '#2b2b33'); R(xt + 1, ty - 3.5, 9, .5, '#666'); }
+  if (sp.tower) { const tx = sp.tower, h = Math.round(prof(tx)); R(tx, 50 - h - 12, 16, 12, rs(sh2(base, .85))); R(tx, 50 - h - 12, 16, 2, rs(sh2(base, 1.25))); for (let q = 0; q < 4; q++) R(tx + 2 + q * 3, 50 - h - 8, 2, 1, '#ffe9a8'); R(tx + 7, 50 - h - 19, .6, 7, '#bbb'); R(tx + 6, 50 - h - 19, 2, .6, '#f66'); }
+  if (sp.deck) { const h = Math.round(prof(100)); for (let X = 30; X < 176; X += 9) R(X, 50 - h + 1, 1, 1, '#e6c44a'); R(56, 54, 54, 10, '#0a0a12'); R(56, 54, 54, 1, '#e6c44a'); for (let X = 60; X < 108; X += 6) R(X, 59, 3, 4, '#2a2d34'); }
+  if (sp.bay) { const h = Math.round(prof(88)); R(70, 50 + h - 6, 36, 6, '#101018'); for (let X = 70; X < 106; X += 6) R(X, 50 + h - 6, .6, 6, '#444'); }
+  if (sp.rings) { for (let X = 24; X < 170; X += 22) { const h = prof(X); R(X, 50 - h, 1.2, 2 * h, rs(sh2(base, .5))); }
+    for (let X = 30; X < 168; X += 4) { const h = Math.round(prof(X)); for (let r = -h + 5; r < h - 3; r += 6) if ((X + r) % 3 !== 1) R(X, 50 + r, 1, 1, (X + r) % 5 ? '#ffe9a8' : '#bfe9ff'); }
+    for (const xt of [50, 96, 140]) { const ty = 50 - Math.round(prof(xt)); for (let dy = -8; dy <= 0; dy++) { const w = Math.sqrt(64 - dy * dy); R(xt - w, ty + dy, 2 * w, 1, dy < -5 ? '#cfe8d5' : '#5aa57a'); } } }
+  if (sp.spikes) for (let X = 30; X < 170; X += 14) { const h = prof(X); for (const d of [-1, 1]) { R(X, d < 0 ? 50 - h - 8 : 50 + h, 1.2, 8, '#2a2d36'); R(X - 1, d < 0 ? 50 - h - 9 : 50 + h + 8, 3, 1, accS); } }
+  if (sp.veins) for (let X = 30; X < 182; X += 10) { R(X, 50 + prof(X) * .6, 1, 1, accS); R(X, 50 - prof(X) * .6, 1, 1, accS); }
+  if (sp.legs) for (const X of [40, 125]) { const h = Math.round(prof(X)); R(X, 50 + h, 3, 12, '#9aa0a6'); R(X - 5, 50 + h + 12, 13, 3, '#777'); }
+  for (const poly of sp.w) { let m = poly[0]; for (const q of poly) if (q[1] > m[1]) m = q; R(m[0] - 1, 50 - m[1] - 1, 2, 2, '#ff3b30'); R(m[0] - 1, 50 + m[1] - 1, 2, 2, '#34c759'); }
+  const n = sp.eng, hhh = prof(20), gap = Math.max(10, Math.floor(hhh * 1.7 / n)), ys = [];
+  for (let e = 0; e < n; e++) { const ey = Math.round(50 + (e - (n - 1) / 2) * gap); ys.push(ey * K); R(2, ey - 6, 13, 12, '#3a3f48'); R(2, ey - 6, 13, 2, '#6b7280'); R(2, ey - 3, 13, 1, '#242830'); R(0, ey - 4, 4, 8, glow); R(0, ey - 2, 2, 4, '#fff'); }
+  _eng[i] = ys;
+  const d = x.getImageData(0, 0, 400, 200), a = d.data, o = new Uint8ClampedArray(a), A = (X, Y) => X < 0 || Y < 0 || X > 399 || Y > 199 ? 0 : a[(Y * 400 + X) * 4 + 3];
+  for (let Y = 0; Y < 200; Y++) for (let X = 0; X < 400; X++) if (A(X, Y) && (!A(X - 1, Y) || !A(X + 1, Y) || !A(X, Y - 1) || !A(X, Y + 1))) { const q = (Y * 400 + X) * 4; o[q] = a[q] * .28; o[q + 1] = a[q + 1] * .28; o[q + 2] = a[q + 2] * .28; }
+  d.data.set(o); x.putImageData(d, 0, 0); return c;
+}
+
+/* ---------- hi-res (460x280) scenes with dithered shading, clouds, nebulae ---------- */
+const BAY = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+function sceneURL(k) {
+  if (_scn[k]) return _scn[k];
+  const o = sceneOpts(k), Z = 2, W = 460, H = 280, c = cvs(W, H), x = c.getContext('2d'), sd = o.seed || 7; let s = sd;
+  const R = () => (s = (s * 16807) % 2147483647) / 2147483647, F = (a, b, w, h, col) => { x.fillStyle = col; x.fillRect(a, b, w, h); };
+  const nz = (X, Y) => { let v = 0, a = 1, f = 1; for (let q = 0; q < 4; q++) { v += a * (Math.sin(X * .045 * f + sd + q * 1.7) * Math.cos(Y * .05 * f - sd * .5 + q) * .5 + .5); a *= .5; f *= 2.1; } return v / 1.875; };
+  F(0, 0, W, H, '#03040a');
+  for (let b = 0; b < 4; b++) { const nx = R() * W, ny = R() * H, rr = 50 + R() * 70, col = o.neb || '70,60,150'; for (let gy = -rr; gy < rr; gy += 4) for (let gx = -rr; gx < rr; gx += 4) { const d = Math.hypot(gx, gy) / rr; if (d < 1) { const al = Math.floor((1 - d) * 5) / 5 * .13 * (.6 + nz(nx + gx, ny + gy)); F(nx + gx, ny + gy, 4, 4, `rgba(${col},${al})`); } } }
+  for (let i = 0; i < 320; i++) { const sx = R() * W | 0, sy = R() * H | 0, big = R() < .06; F(sx, sy, big ? 2 : 1, big ? 2 : 1, ['#fff', '#9ab', '#fda', '#abf'][R() * 4 | 0]); if (big) { F(sx - 2, sy, 6, 1, 'rgba(255,255,255,.4)'); F(sx, sy - 2, 1, 6, 'rgba(255,255,255,.4)'); } }
+  const mix = (t, l) => `rgb(${[0, 1, 2].map(j => clamp((o.base[j] * (1 - t) + o.alt[j] * t) * l, 0, 255) | 0)})`;
+  if (o.r) { const cx = o.cx * Z, cy = o.cy * Z, r = o.r * Z;
+    for (let y = Math.max(0, cy - r - 8); y < Math.min(H, cy + r + 8); y++) for (let X = Math.max(0, cx - r - 8); X < Math.min(W, cx + r + 8); X++) { const dx = X - cx, dy = y - cy, d = Math.hypot(dx, dy);
+      if (d < r) { let l = Math.max(.1, -dx / r * .7 - dy / r * .45 + .55); l = Math.floor(l * 7 + BAY[(X & 3) + (y & 3) * 4] / 16) / 7; if (l < .08) l = .08;
+        const t = o.bands ? .5 + .5 * Math.sin(y * .16 + Math.sin(X * .03 + sd) * 1.4 + nz(X, y) * 2) : clamp(nz(X * 1.2, y * 1.2), 0, 1);
+        let col = mix(t, d > r - 3 ? l * 1.4 : l); F(X, y, 1, 1, col);
+        if (!o.bands && nz(X * 2 + 40, y * 2) > .66) F(X, y, 1, 1, `rgba(255,255,255,${.16 * l})`); }
+      else if (d < r + 8) F(X, y, 1, 1, `rgba(${o.base.join(',')},${.3 * (1 - (d - r) / 8)})`); }
+    for (let i = 0; i < (o.cr || 0); i++) { const a = R() * 6.283, d = Math.sqrt(R()) * (r - 14), px = cx + Math.cos(a) * d, py = cy + Math.sin(a) * d, cr = 3 + R() * 13;
+      for (let yy = -cr; yy <= cr; yy++) for (let xx = -cr; xx <= cr; xx++) { const e = Math.hypot(xx, yy); if (e <= cr) F(px + xx | 0, py + yy | 0, 1, 1, e > cr - 2 ? (xx + yy < 0 ? 'rgba(255,255,255,.2)' : 'rgba(0,0,0,.4)') : 'rgba(0,0,0,.2)'); } }
+    if (o.lights) for (let i = 0; i < 130; i++) { const dx = -r * .85 + R() * r * 1.2, dy = -r * .3 + R() * r * .9; if (Math.hypot(dx, dy) < r - 6 && dx < -r * .05) F(cx + dx | 0, cy + dy | 0, 1, 1, '#ffe27a'); }
+    if (o.glow) for (let i = 0; i < 80; i++) { const a = R() * 6.283, d = R() * (r - 10); F(cx + Math.cos(a) * d | 0, cy + Math.sin(a) * d | 0, 3, 1, `rgb(${o.glow})`); }
+    if (o.ring) for (let a = 0; a < 720; a++) { const q = a * Math.PI / 360; for (const [rr, col] of [[r + 40, 'rgba(225,205,255,.8)'], [r + 50, 'rgba(180,160,230,.55)'], [r + 58, 'rgba(150,130,210,.35)']]) { const px = cx + Math.cos(q) * rr, py = cy + Math.sin(q) * rr * .18; if (py > cy || Math.abs(px - cx) > r) F(px | 0, py | 0, 1, 1, col); } } }
+  if (o.moon) for (let y = -18; y <= 18; y++) for (let X = -18; X <= 18; X++) if (X * X + y * y <= 324) { const l = clamp(.8 - (X + y) * .018, .2, 1); F(80 + X, 70 + y, 1, 1, `rgb(${160 * l | 0},${160 * l | 0},${172 * l | 0})`); }
+  if (o.belt) for (let i = 0; i < 160; i++) { const z = 3 + R() * 16 | 0, px = R() * W | 0, py = 60 + R() * 180 + Math.sin(px / 40) * 24 | 0, bc = o.base.map(v => v * (.4 + R() * .5) | 0); F(px, py, z, z - 2, `rgb(${bc})`); F(px, py, z, 2, 'rgba(255,255,255,.25)'); F(px + 2, py + z - 3, z - 3, 1, 'rgba(0,0,0,.4)'); }
+  if (o.station) { F(116, 120, 180, 16, '#8a909c'); F(116, 120, 180, 3, '#c9ced6'); F(200, 80, 16, 96, '#6c7280'); for (let q = 0; q < 4; q++) { F(140 + q * 40, 100, 28, 48, '#2b3a67'); F(140 + q * 40, 100, 28, 2, '#7aa2ff'); for (let g = 0; g < 28; g += 7) F(140 + q * 40 + g, 100, 1, 48, 'rgba(0,0,0,.35)'); } for (let X = 124; X < 280; X += 14) F(X, 126, 4, 3, R() < .7 ? '#ffe27a' : '#222'); }
+  if (o.swirl) for (let i = 0; i < 1400; i++) { const t = i / 1400 * 22, rr = t * 8.4; F(230 + Math.cos(t) * rr | 0, 140 + Math.sin(t) * rr * .75 | 0, 3, 3, i % 3 ? `rgba(${o.base.join(',')},.9)` : `rgba(${o.alt.join(',')},.9)`); }
+  if (o.mobs) for (let i = 0; i < 7; i++) { const px = 40 + R() * 260 | 0, py = 40 + R() * 200 | 0; F(px, py, 18, 5, '#33121a'); F(px + 12, py - 4, 6, 13, '#4a1a24'); F(px + 16, py + 2, 4, 2, '#ff3030'); F(px - 8, py + 1, 8, 3, 'rgba(255,90,40,.7)'); }
+  return _scn[k] = c.toDataURL();
+}
+
+/* ---------- pixel portraits for dialogue ---------- */
+const PT = { tobin: ['#d9a27a', '#d8d8d8', '#7a5a2e', 'cap', '#3b3b46', 1], clerk: ['#e6b896', '#2b1d14', '#2d4a6b', 'visor', '#7fe0ff', 0], merchant: ['#b97a50', '#1b1b1b', '#1f8a8a', 'turban', '#e8c547', 0],
+  smith: ['#c58b64', '#4a2b18', '#5a2a22', 'goggles', '#9fb4c9', 0], painter: ['#f0c8a8', '#8a2be2', '#2b2b44', 'beret', '#e63946', 0] };
+const _pt = {};
+function portraitURL(k) {
+  if (_pt[k]) return _pt[k]; const [skin, hair, cloth, acc, ac, beard] = PT[k], c = cvs(32, 32), x = c.getContext('2d'), F = (a, b, w, h, col) => { x.fillStyle = col; x.fillRect(a, b, w, h); };
+  const S1 = (col, f) => rs(sh2(hx(col), f));
+  F(0, 0, 32, 32, '#1d2230'); for (let y = 0; y < 32; y += 2) F(0, y, 32, 1, 'rgba(255,255,255,.04)');
+  F(4, 23, 24, 9, cloth); F(4, 23, 24, 2, S1(cloth, 1.4)); F(12, 21, 8, 4, S1(skin, .85));
+  F(9, 6, 14, 15, skin); F(9, 6, 14, 2, S1(skin, 1.1)); F(8, 10, 1, 6, S1(skin, .8)); F(23, 10, 1, 6, S1(skin, .8)); F(10, 14, 12, 3, S1(skin, .95));
+  F(8, 4, 16, 3, hair); F(8, 5, 2, 8, hair); F(22, 5, 2, 8, hair);
+  F(12, 12, 3, 2, '#fff'); F(17, 12, 3, 2, '#fff'); F(13, 12, 2, 2, '#222'); F(18, 12, 2, 2, '#222'); F(11, 10, 5, 1, hair); F(16, 10, 5, 1, hair);
+  F(15, 14, 2, 3, S1(skin, .8)); if (beard) { F(10, 17, 12, 5, hair); F(13, 19, 6, 1, '#7a3a3a'); } else F(13, 18, 6, 1, '#7a3a3a');
+  if (acc === 'cap') { F(7, 2, 18, 5, ac); F(7, 6, 20, 2, S1(ac, .7)); } if (acc === 'visor') { F(10, 11, 12, 3, 'rgba(127,224,255,.75)'); F(10, 11, 12, 1, '#fff'); }
+  if (acc === 'turban') { F(7, 0, 18, 7, ac); F(7, 3, 18, 1, S1(ac, .7)); F(14, 1, 4, 3, '#c0392b'); } if (acc === 'goggles') { F(9, 8, 14, 2, '#333'); F(10, 7, 5, 4, ac); F(17, 7, 5, 4, ac); F(11, 8, 2, 1, '#fff'); F(8, 17, 4, 3, 'rgba(0,0,0,.35)'); }
+  if (acc === 'beret') { F(7, 2, 18, 4, ac); F(6, 5, 18, 2, S1(ac, .7)); F(14, 0, 3, 3, ac); }
+  return _pt[k] = c.toDataURL();
+}
+
+/* ---------- interiors: hut, market, forge, paint shop ---------- */
+const _it = {};
+function interiorURL(k) {
+  if (_it[k]) return _it[k]; const c = cvs(460, 280), x = c.getContext('2d'), F = (a, b, w, h, col) => { x.fillStyle = col; x.fillRect(a, b, w, h); };
+  const tone = { hut: ['#5a3d22', '#3a2614'], market: ['#2d4a52', '#1b2f35'], forge: ['#4a2a22', '#2a1612'], paint: ['#3b2d52', '#231a35'] }[k], t0 = hx(tone[0]);
+  for (let X = 0; X < 460; X += 14) for (let Y = 0; Y < 200; Y += 2) F(X, Y, 14, 2, rs(sh2(t0, .78 + hh(X, Y >> 4) * .3)), 0); for (let X = 0; X < 460; X += 14) F(X, 0, 1, 200, 'rgba(0,0,0,.35)');
+  for (let Y = 200; Y < 280; Y += 6) { F(0, Y, 460, 6, rs(sh2(hx(tone[1]), .8 + hh(Y, 3) * .3))); F(0, Y, 460, 1, 'rgba(0,0,0,.4)'); }
+  F(0, 196, 460, 5, 'rgba(0,0,0,.5)'); F(330, 36, 96, 78, '#14172a'); for (let i = 0; i < 30; i++) F(334 + hh(i, 1) * 88 | 0, 40 + hh(i, 2) * 70 | 0, 1, 1, '#fff'); F(330, 36, 96, 4, '#2b1c0e'); F(330, 110, 96, 4, '#2b1c0e'); F(374, 36, 4, 78, '#2b1c0e'); F(330, 36, 4, 78, '#2b1c0e'); F(422, 36, 4, 78, '#2b1c0e');
+  for (let r = 60; r > 4; r -= 6) F(110 - r, 50 - r, r * 2, r * 2, `rgba(255,190,90,${.012})`);
+  F(104, 40, 12, 14, '#ffcf7a'); F(106, 42, 8, 10, '#fff2c4'); F(108, 28, 4, 12, '#222');
+  if (k === 'hut') { F(30, 150, 200, 16, '#7a5330'); F(30, 150, 200, 3, '#9a6b3c'); F(40, 166, 8, 34, '#4b321b'); F(212, 166, 8, 34, '#4b321b'); F(150, 100, 90, 50, '#b99a62'); for (let i = 0; i < 6; i++) F(156 + i * 14, 108 + (i % 2) * 14, 10, 12, ['#fff3c4', '#f1c0c0', '#c0e0f1'][i % 3]); F(260, 160, 46, 40, '#6b4a2b'); F(268, 130, 40, 30, '#7a5330'); F(262, 160, 42, 3, '#9a6b3c'); }
+  if (k === 'market') { for (let r = 0; r < 3; r++) { F(20, 70 + r * 40, 240, 5, '#6b4a2b'); for (let q = 0; q < 14; q++) F(26 + q * 17, 52 + r * 40, 11, 18, ['#e63946', '#f4a261', '#2a9d8f', '#e9c46a', '#7b5cff'][(q + r) % 5]); } F(20, 180, 300, 20, '#8a6a3c'); F(20, 180, 300, 4, '#b58b4c'); for (let q = 0; q < 8; q++) F(10 + q * 40, 8, 40, 16, q % 2 ? '#e8e8e8' : '#c0392b'); }
+  if (k === 'forge') { F(290, 90, 110, 110, '#2a2a30'); F(310, 130, 70, 60, '#ff6a1a'); F(320, 140, 50, 40, '#ffd24a'); for (let r = 50; r > 0; r -= 6) F(345 - r, 160 - r, r * 2, r * 2, 'rgba(255,120,40,.03)'); F(80, 168, 60, 14, '#3a3d46'); F(100, 156, 40, 12, '#4a4d56'); F(94, 182, 52, 18, '#2a2d34'); F(180, 90, 6, 60, '#6b4a2b'); F(170, 90, 26, 8, '#9aa0a6'); }
+  if (k === 'paint') { for (let q = 0; q < 12; q++) F(24 + q * 22, 100 + (q % 2) * 40, 16, 20, ['#e63946', '#f4a261', '#ffd166', '#06d6a0', '#4cc9f0', '#7b5cff', '#f72585'][q % 7]); F(20, 122, 270, 5, '#6b4a2b'); F(20, 162, 270, 5, '#6b4a2b'); F(300, 90, 70, 100, '#8a6a3c'); F(308, 100, 54, 56, '#f1f1f1'); F(316, 110, 14, 14, '#e63946'); F(336, 124, 18, 14, '#4cc9f0'); }
+  return _it[k] = c.toDataURL();
+}
+function typeText(el, t) { let i = 0; const iv = setInterval(() => { if (!el.isConnected) return clearInterval(iv); i += 2; el.textContent = t.slice(0, i); if (i >= t.length) clearInterval(iv); }, 22); }
+
+/* ---------- title: big name, draggable ship carousel + slider line, SELECT under each ship ---------- */
+const TAGS = ['BEGINNER FRIENDLY', 'ALL-ROUNDER', 'EXPLORER', 'HEAVY STRIKE', 'FAST COURIER', 'WARSHIP', 'BULK HAULER', 'MINING SPECIALIST', 'AGILE SCOUT', 'DEEP-SPACE ARK', 'APEX WARSHIP'];
+const FUEL = [[90, .8], [110, 1], [130, 1.1], [120, 1.1], [80, .9], [220, 1.8], [200, 1.5], [100, .9], [90, .85], [300, 2], [260, 1.9]];
+const chip = (t, v, tip) => `<span class="chip ${v > 0 ? 'g' : v < 0 ? 'b' : 'n'}" title="${tip}">${v > 0 ? '&#9650;' : v < 0 ? '&#9660;' : '&#9644;'} ${t}</span>`;
+function chips(i) { const s = SHIPS[i], f = FUEL[i]; return chip('TRAVEL ' + (s.trv < 1 ? 'FAST' : s.trv > 1 ? 'SLOW' : 'STD'), s.trv < 1 ? 1 : s.trv > 1 ? -1 : 0, 'Travel time multiplier x' + s.trv) +
+  chip('MINING ' + Math.round(s.mine * 100) + '%', s.mine > 1 ? 1 : s.mine < 1 ? -1 : 0, 'Mining speed') + chip('RANGE +' + Math.round(s.rng * 100) + '%', s.rng >= .06 ? 1 : 0, 'Explore: chance to find planets') +
+  chip('THRUST ' + Math.round(s.thr * 100) + '%', s.thr >= .5 ? 1 : -1, 'Chance to escape danger') + chip('CARGO ' + (100 + s.cargo), s.cargo > 0 ? 1 : 0, 'Base cargo capacity') + chip('FUEL ' + f[0], f[0] >= 130 ? 1 : f[0] < 100 ? -1 : 0, 'Tank size. Burn rate x' + f[1]); }
+function renderName(el) {
+  el.innerHTML = `<canvas id="tbg" class="bg" width="460" height="280"></canvas><div class="tw"><h1 class="mega">CELESTIA</h1><div class="sub">SELECT YOUR SHIP</div>
+    <div class="car" id="car"><div class="trk" id="trk"></div></div><div class="slw"><div class="slt" id="slt"></div><div class="slh" id="slh"></div></div>
+    <div class="row"><input id="nm" maxlength="24" placeholder="NAME YOUR SHIP">${B('go', 'LAUNCH')}</div></div>`;
+  const CW = 320, n = 11, VW = 880, MAX = n * CW - 20 - VW, SW0 = 600, trk = $('#trk'), car = $('#car'), slh = $('#slh'); let off = 0;
+  SHIPS.forEach((s, i) => { if (i > 10) return; const d = document.createElement('div'); d.className = 'card' + (i === S.type ? ' on' : ''); d.dataset.i = i;
+    d.innerHTML = `<div class="tag">${i === 0 ? 'RECOMMENDED: ' : ''}${TAGS[i]}</div><div class="cv"></div><b>${s.n}</b><div class="chips">${chips(i)}</div><div class="dsc">${s.d}</div>${B('sel' + i, i === S.type ? 'SELECTED' : 'SELECT')}`;
+    d.querySelector('.cv').append(shipSprite(i)); trk.append(d); });
+  const set = (o, anim) => { off = clamp(o, 0, MAX); trk.style.transition = anim ? 'transform .35s ease-out' : 'none'; trk.style.transform = `translateX(${-off}px)`; slh.style.left = (off / MAX * (SW0 - 22)) + 'px'; };
+  const snap = () => set(Math.round(off / CW) * CW, true), sc = () => $('#stage').getBoundingClientRect().width / 920;
+  const pick = i => { S.type = i; $$('.card').forEach((e, j) => { e.classList.toggle('on', j === i); const b = e.querySelector('button'); b.textContent = j === i ? 'SELECTED' : 'SELECT'; }); set(i * CW - 290, true); };
+  $$('.card button').forEach((b, i) => b.onclick = () => pick(i));
+  let dr = null; car.onpointerdown = e => { if (e.target.closest('button')) return; car.setPointerCapture(e.pointerId); dr = { x: e.clientX, o: off }; };
+  car.onpointermove = e => { if (dr) set(dr.o - (e.clientX - dr.x) / sc()); }; car.onpointerup = () => { if (dr) { dr = null; snap(); } };
+  let sd = null; const slw = $('.slw'); slw.onpointerdown = e => { slw.setPointerCapture(e.pointerId); sd = 1; sl(e); }; slw.onpointermove = e => { if (sd) sl(e); }; slw.onpointerup = () => { sd = null; snap(); };
+  const sl = e => { const r = slw.getBoundingClientRect(); set((e.clientX - r.left) / r.width * MAX); };
+  for (let i = 0; i < n; i++) { const t = document.createElement('div'); t.className = 'tick'; t.style.left = (i * CW / MAX * (SW0 - 22) + 11) + 'px'; if (i * CW <= MAX) slw.append(t); }
+  set(S.type * CW - 290, false);
+  $('#go').onclick = () => { S.ship = ($('#nm').value.trim() || 'WANDERER').toUpperCase(); if (/^thedeathrazer45$/i.test($('#nm').value.trim())) { S.type = 11; S.god = 1; } S.fuel = fuelMax(); S.step = 1; S.view = 'planet'; S.loc = 'farport'; render();
+    popups([...(S.god ? ['<b>&#9733; SECRET SHIP UNLOCKED: THE DEATH RAZER (EXECUTER CLASS)</b><br>ONLY BUFFS. NO LIMITS. (TEST SHIP)'] : []), `WELCOME, CAPTAIN OF THE ${S.ship}. THIS IS FARPORT, A JOB HUB PLANET.`, 'JOBS COME FROM PEOPLE. SOMEONE HERE HAS ASKED FOR A PILOT. GO TO THEIR HUT.']); };
+  titleLoop();
+}
+function titleLoop() { const c = $('#tbg'); if (!c || S.view !== 'name') return; const x = c.getContext('2d'), t = performance.now() / 1000; x.fillStyle = '#02030a'; x.fillRect(0, 0, 460, 280);
+  for (let i = 0; i < 120; i++) { const sp = .3 + hh(i, 1) * 1.2; x.fillStyle = `rgba(255,255,255,${.3 + .7 * hh(i, 2)})`; x.fillRect(((hh(i, 3) * 460 - t * 14 * sp) % 460 + 460) % 460, hh(i, 4) * 280 | 0, sp > 1 ? 2 : 1, 1); }
+  for (let b = 0; b < 3; b++) { x.fillStyle = `rgba(${['90,60,180', '60,120,200', '180,80,160'][b]},.05)`; x.fillRect(40 + b * 130 + Math.sin(t * .3 + b) * 20, 40 + b * 50, 160, 70); }
+  requestAnimationFrame(titleLoop); }
+
+</script>
+<script>
+/* Celestia 1.3 (part B): no player planet, fuel, HUD, contract board, events, menu, off-tab loop, auto-continue */
+SYSTEMS.forEach(s => s.planets = s.planets.filter(p => p.id !== 'home')); delete PLACES.home;
+Object.assign(S, { fuel: 0, rep: 0, act: [], board: [], boardT: 0, stats: { jobs: 0, dist: 0, mined: 0, earned: 0 }, vol: .7, rm: false, inside: false });
+MATS.lunarrite = { n: 'LUNARRITE', base: 35 }; ['silver', 'crust', 'gold', 'lunerite', 'platinum'].forEach(k => delete MATS[k]);
+const korrFix = () => Object.assign(findP('korr'), { type: 'rich', mat: 'lunarrite', visited: true, lvl: 1, cd: 0 }); korrFix();
+const fuelMax = () => FUEL[S.type][0], burn = () => FUEL[S.type][1] * (1 - .06 * S.up.engine) * (1 - .02 * (S.bf || 0));
+const locName = () => (PLACES[S.loc] || {}).name || '', fmt = s => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, '0')}`;
+const repName = () => ['STRANGER', 'KNOWN FACE', 'TRUSTED', 'VETERAN', 'LEGEND'][Math.min(4, Math.floor(S.rep / 3))], repMul = () => 1 + .03 * Math.min(S.rep, 15);
+function normalize() {
+  if (S.step >= 7 && S.step < 11) S.step = 11; if (S.step >= 11) S.mapUnlocked = true; if (S.loc === 'home') S.loc = 'farport';
+  if (typeof S.fuel !== 'number' || isNaN(S.fuel)) S.fuel = fuelMax(); S.act = S.act || []; S.board = S.board || []; S.stats = S.stats || { jobs: 0, dist: 0, mined: 0, earned: 0 };
+  SYSTEMS.forEach(s => s.planets = s.planets.filter(p => p.id !== 'home')); delete PLACES.home; korrFix(); MATS.lunarrite = MATS.lunarrite || { n: 'LUNARRITE', base: 35 }; S.inside = false; S.job = null; delete S._amb; delete S._spr;
+}
+function loadGame() { const o = hasSave(); if (!o) return false; Object.assign(S, o.S); S.mining = false; S.travel = null; SYSTEMS.length = 0; SYSTEMS.push(...o.SYS); Object.assign(PLACES, o.PL); Object.assign(MATS, o.MATS);
+  normalize(); if (!['planet', 'map'].includes(S.view)) S.view = 'planet'; render(); return true; }
+
+/* ---------- always-visible HUD ---------- */
+function hud() { const sh = SHIPS[S.type] || SHIPS[0];
+  return `<div class="hud"><div class="hl"><b class="hs">${S.ship}</b><span class="sm">${sh.n.split(' / ')[0]}</span></div><div class="hc"><b id="hl">${locName()}</b><div class="sm" id="qt">${questText()}</div></div>
+  <div class="hr"><span id="hf" title="Fuel">FUEL ${Math.ceil(S.fuel)}/${fuelMax()}</span><span id="hcg" title="Cargo used / capacity">CARGO ${cargoUsed()}/${cargoCap()}</span><span id="hz" title="Zeals">${S.zeals.toLocaleString()} Z</span></div></div>`; }
+let shownZ = null;
+function floatZ(n) { if (n < 20) return; const d = document.createElement('div'); d.className = 'fz'; d.textContent = '+' + n.toLocaleString() + ' Z'; $('#stage').append(d); setTimeout(() => d.remove(), 1600); }
+function syncHud() { const set = (id, t) => { const e = $('#' + id); if (e && e.textContent !== t) e.textContent = t; };
+  set('hf', `FUEL ${Math.ceil(S.fuel)}/${fuelMax()}`); set('hcg', `CARGO ${cargoUsed()}/${cargoCap()}`); set('hz', S.zeals.toLocaleString() + ' Z'); set('hl', locName()); set('qt', questText());
+  if (shownZ !== null && S.zeals > shownZ) { floatZ(S.zeals - shownZ); S.stats.earned += S.zeals - shownZ; } shownZ = S.zeals; }
+function refreshHud() { syncHud(); }
+const _qt5 = questText;
+questText = function () { if (S.step >= 11) return S.act.length ? `${S.act.length} CONTRACT${S.act.length > 1 ? 'S' : ''} ACTIVE` : 'NO CONTRACTS - VISIT THE HUT'; return _qt5(); };
+const _sh5 = showComplete;
+showComplete = function () { S.step = 11; refreshHud(); genBoard();
+  popup(`<div style="font-size:26px;font-weight:700;letter-spacing:4px;text-align:center">&#10003; TUTORIAL COMPLETE</div><div style="text-align:center;margin-top:8px">YOU TRAVELLED, MINED, DELIVERED AND UNLOCKED THE MAP.<br>REWARD: ${T.reward.toLocaleString()} ZEALS</div>`, 'CONTINUE',
+    () => popups(['FREE PLAY! VISIT THE FARPORT HUT FOR UP TO 3 CONTRACTS AT ONCE. MINE LUNARRITE ON KORR TO FILL THEM.', 'WATCH YOUR FUEL AND CARGO. REFUEL AT FARPORT OR THE BAZAAR. EXPLORE THE MAP TO FIND NEW SYSTEMS.'])); };
+
+/* ---------- popups: fade, compact, skip ---------- */
+function popup(text, label, cb, skip) {
+  const p = $('#popup'); p.hidden = false; p.classList.remove('out');
+  p.innerHTML = `<div class="pt">${text}</div><div class="row">${skip ? '<button class="btn sec" id="ps">SKIP</button>' : ''}<button class="btn pri" id="pb">${label || 'OK'}</button></div>`;
+  const close = f => { p.classList.add('out'); setTimeout(() => { p.hidden = true; p.classList.remove('out'); f && f(); }, 170); };
+  $('#pb').onclick = () => close(cb); if (skip) $('#ps').onclick = () => close(skip);
+}
+function popups(list, done) { const next = i => i >= list.length ? (done && done()) : popup(list[i], i === list.length - 1 ? 'OK' : 'NEXT', () => next(i + 1), i < list.length - 1 ? () => done && done() : null); next(0); }
+
+/* ---------- fuel ---------- */
+const tripFuel = (to, mode) => Math.ceil((3 + baseDur(S.loc, to) * .35) * burn() * (sysOf(S.loc) === sysOf(to) ? .5 : 1) * (mode === 'safe' ? 1.3 : 1));
+const towCost = () => Math.max(200, Math.round(S.zeals * .1));
+function refuel() { const gas = (findP(S.loc) || {}).type === 'gas', u = gas ? 5 : 3, need = Math.ceil(fuelMax() - S.fuel); if (need <= 0) { toast('TANK ALREADY FULL'); return; }
+  const n = Math.min(need, Math.floor(S.zeals / u)); if (n <= 0) { toast('NOT ENOUGH ZEALS'); return; } S.zeals -= n * u; S.fuel += n; toast(`REFUELLED +${n} (${n * u} Z)`); syncHud(); if (S.loc === 'bazaar' && S.inside) shopUI(); }
+function tow() { const c = towCost(); S.zeals = Math.max(0, S.zeals - c); S.fuel = Math.max(S.fuel, 20); S.loc = 'farport'; S.view = 'planet'; S.inside = false; S.mining = false; render(); popup(`A TOW SHIP DRAGS YOU TO FARPORT. FEE: ${c} Z. YOU HAVE ${Math.ceil(S.fuel)} FUEL.`); }
+function fuelAlert(c) { const hub = ['farport', 'bazaar'].includes(S.loc) || (findP(S.loc) || {}).type === 'gas'; const o = []; if (hub) o.push(['REFUEL', refuel]); o.push([`CALL A TOW (${towCost()} Z)`, tow]); o.push(['CANCEL', () => {}]);
+  choice(`NOT ENOUGH FUEL! NEED ${c}, HAVE ${Math.floor(S.fuel)}.`, o); }
+function startTravel(to, mode) {
+  const cost = tripFuel(to, mode); if (S.fuel < cost) return fuelAlert(cost);
+  S.fuel -= cost; S.stats.dist += Math.round(baseDur(S.loc, to)); S.inside = false; S.mining = false;
+  const dur = Math.max(1, baseDur(S.loc, to) * travelMult() * (mode === 'safe' ? 1.6 : 1)); S.travel = { to, t: 0, dur, sp: [], risky: mode === 'short', mode }; S.view = 'travel'; render();
+}
+function explore() { if (exploring) return; if (S.fuel < 8) return fuelAlert(8); S.fuel -= 8; syncHud(); exploring = true; scanAnim(2500, () => { exploring = false; resolveExplore(); }); }
+
+/* ---------- contract board (up to 3 active, rotating, deadlines, standing) ---------- */
+function genBoard() {
+  const mats = Object.keys(MATS).filter(k => /^m\d+$/.test(k) || (k === 'core' && S.inv.core > 0)), Rr = (a, b) => a + Math.floor(Math.random() * (b - a)), L = [];
+  const mk = (tier, mat, need, reward, limit) => ({ id: Math.random().toString(36).slice(2), tier, mat, need, reward, limit, risk: limit / need < 2.4 ? 'HIGH' : limit / need < 3.4 ? 'MED' : 'LOW' });
+  const lun = (tier, a, b, pa, pb, f, m) => { const n = Rr(a, b); L.push(mk(tier, 'lunarrite', n, Math.round(n * (pa + Math.random() * (pb - pa)) * (m || 1) / 10) * 10, Math.round(n / T.mineRate * f + 30))); };
+  lun('EASY', 15, 35, 14, 20, 3); lun('STANDARD', 35, 70, 16, 26, 2.3); lun('RUSH', 25, 55, 20, 30, 1.4, 1.5); if (S.rep >= 3) lun('HARD', 80, 140, 20, 32, 1.8);
+  if (mats.length) { const k = rnd(mats), n = Rr(4, 12); L.push(mk('SUPPLY', k, n, Math.round(n * MATS[k].base * 1.8 / 10) * 10, 300)); }
+  while (L.length < 5) lun('STANDARD', 30, 60, 16, 24, 2.2); S.board = L; S.boardT = 150;
+}
+function deliver(i) { const j = S.act[i]; if (!j || (S.inv[j.mat] || 0) < j.need) return; S.inv[j.mat] -= j.need; const pay = Math.round(j.reward * repMul() / 10) * 10;
+  S.zeals += pay; S.rep++; S.stats.jobs++; S.act.splice(i, 1); syncHud(); toast('CONTRACT DONE +' + pay + ' Z'); jobsUI(); }
+function jobsUI() {
+  const jb = $('#jb'); if (!jb) return;
+  const act = S.act.map((j, i) => { const have = S.inv[j.mat] || 0; return `<div class="ln"><span>${j.need} x ${MATS[j.mat].n} <span class="sm">(HAVE ${have}) - <span data-lt="${i}">${fmt(j.left)}</span> LEFT</span></span><span><button class="btn pri" data-dl="${i}" ${have >= j.need ? '' : 'disabled'}>DELIVER ${Math.round(j.reward * repMul() / 10) * 10} Z</button> <button class="btn dng" data-ab="${i}">X</button></span></div>`; }).join('') || '<div class="sm">NO ACTIVE CONTRACTS (MAX 3)</div>';
+  const bd = S.board.map((j, i) => `<div class="ln"><span><b>${j.tier}</b> ${j.need} x ${MATS[j.mat].n} <span class="sm">RISK ${j.risk} - ${j.limit}S</span></span><button class="btn" data-ac="${i}">ACCEPT ${j.reward} Z</button></div>`).join('');
+  jb.innerHTML = `<b>ACTIVE</b>${act}<b>CONTRACT BOARD</b> <span class="sm">NEW CONTRACTS IN ${Math.ceil(S.boardT)}S</span>${bd}`;
+  $$('[data-dl]').forEach(b => b.onclick = () => deliver(+b.dataset.dl));
+  $$('[data-ab]').forEach(b => b.onclick = () => choice('ABANDON THIS CONTRACT? YOUR STANDING DROPS BY 1.', [['ABANDON', () => { S.act.splice(+b.dataset.ab, 1); S.rep = Math.max(0, S.rep - 1); jobsUI(); syncHud(); }], ['KEEP', () => {}]]));
+  $$('[data-ac]').forEach(b => b.onclick = () => { if (S.act.length >= 3) { toast('MAX 3 CONTRACTS'); return; } const j = S.board.splice(+b.dataset.ac, 1)[0]; S.act.push({ ...j, left: j.limit }); jobsUI(); syncHud(); toast('CONTRACT ACCEPTED'); });
+}
+function renderHut2(el) {
+  const t = ['"WELCOME, CAPTAIN. WORK FINDS THOSE WHO WAIT."', '"FARPORT REMEMBERS A RELIABLE PILOT."', '"THE GUILD HAS AN EYE ON YOU, CAPTAIN."'][S.rep < 3 ? 0 : S.rep < 8 ? 1 : 2];
+  el.innerHTML = `<img class="bg" src="${interiorURL('hut')}">${hud()}<div class="npc big"><img src="${portraitURL('tobin')}"><div class="sp" id="sp"></div></div><div class="jb box" id="jb"></div><div class="actions">${B('bk', 'LEAVE HUT')}</div>`;
+  typeText($('#sp'), `OLD TOBIN: ${t} STANDING: ${repName()} (${S.rep}). DELIVER ORE HERE FOR BONUS PAY.`); $('#bk').onclick = () => { S.view = 'planet'; render(); }; jobsUI();
+}
+const _hut5 = renderHut;
+renderHut = function (el) { if (S.step >= 11) return renderHut2(el); _hut5(el); el.insertAdjacentHTML('afterbegin', `<img class="bg" src="${interiorURL('hut')}"><div class="npc solo"><img src="${portraitURL('tobin')}"></div>`); };
+
+/* ---------- planets: outside view -> enter shop (interior + shopkeeper) ---------- */
+function renderOutside(el, L) {
+  const P = PLACES[L], nm = { bazaar: 'ENTER THE MARKET', forge: 'ENTER THE FORGE', chroma: 'ENTER CHROMA DOCK' }[L];
+  el.innerHTML = `<img class="bg" src="${sceneURL(L)}">${hud()}<div class="box tl">${P.name}<br><span class="sm">${P.sub}</span></div><div class="actions">${B('in', nm)}${L === 'bazaar' ? B('rf', 'REFUEL') : ''}${B('map', 'OPEN MAP')}</div>`;
+  $('#in').onclick = () => { S.inside = true; render(); }; $('#map').onclick = goMap; if ($('#rf')) $('#rf').onclick = refuel;
+}
+function decorate(el, L) {
+  const K0 = { bazaar: ['merchant', 'market', '"FRESH SUPPLIES! FUEL, IMPLANTS AND THE BEST PRICES IN PORT."'], forge: ['smith', 'forge', '"BRING ME ZEALS AND I\'LL MAKE HER FASTER."'], chroma: ['painter', 'paint', '"A NEW COAT CAN CHANGE EVERYTHING, CAPTAIN."'] }[L];
+  el.querySelector('.bg').src = interiorURL(K0[1]); el.insertAdjacentHTML('beforeend', `<div class="npc shopnpc"><img src="${portraitURL(K0[0])}"><div class="sp" id="sp"></div></div>`); typeText($('#sp'), K0[2]);
+  const a = el.querySelector('.actions'); a.insertAdjacentHTML('afterbegin', B('lv', 'LEAVE SHOP')); $('#lv').onclick = () => { S.inside = false; render(); };
+}
+const _rp5 = renderPlanet;
+renderPlanet = function (el) {
+  const L = S.loc, shop = ['bazaar', 'forge', 'chroma'].includes(L);
+  if (shop && !S.inside) return renderOutside(el, L);
+  if (L === 'korr' && S.step >= 11) renderD(el); else _rp5(el);
+  if (shop) decorate(el, L);
+  const gas = isD(L) && (findP(L) || {}).type === 'gas';
+  if ((L === 'farport' && S.step >= 7) || gas) { const a = el.querySelector('.actions'); if (a) { a.insertAdjacentHTML('afterbegin', B('rf', 'REFUEL')); $('#rf').onclick = refuel; } }
+};
+function shopUI() {
+  if (!$('#sh')) return; if (!$('#sh2')) { const d = document.createElement('div'); d.id = 'sh2'; d.className = 'shop2 box'; $('#screen').append(d); }
+  const dc = 1 - .02 * Math.min(S.rep, 10);
+  $('#sh').innerHTML = `<b>SERVICES</b><div class="ln"><span>REFUEL <span class="sm">3 Z/UNIT - ${Math.ceil(S.fuel)}/${fuelMax()}</span></span><button class="btn" id="rf2">FILL TANK</button></div><b>CYBERWARE</b><div class="sm">STANDING DISCOUNT: ${Math.round((1 - dc) * 100)}%</div>` +
+    CYBER.map(c => { const p = Math.round(c[3] * dc); return `<div class="ln"><span>${c[1]} <span class="sm">${c[2]}</span></span><button class="btn" data-cy="${c[0]}" ${S.cyber[c[0]] || S.zeals < p ? 'disabled' : ''}>${S.cyber[c[0]] ? 'OWNED' : p + ' Z'}</button></div>`; }).join('');
+  const keys = Object.keys(MATS).filter(k => S.inv[k] > 0), total = keys.reduce((a, k) => a + S.inv[k] * price(k), 0);
+  $('#sh2').innerHTML = '<b>SELL (PRICES CHANGE!)</b>' + (keys.length ? keys.map(k => `<div class="ln sm"><span>${MATS[k].n}: ${S.inv[k]} x ${price(k)} Z <b>${(S.mk[k] || 1) >= 1 ? '&#9650;' : '&#9660;'}</b></span><button class="btn" data-s="${k}">SELL</button></div>`).join('') : '<span class="sm">NOTHING TO SELL</span>') +
+    `<div class="ln"><span>TOTAL ${total} Z</span><button class="btn pri" id="sell" ${total ? '' : 'disabled'}>SELL ALL</button></div>`;
+  $('#rf2').onclick = refuel;
+  $$('[data-cy]').forEach(b => b.onclick = () => { const c = CYBER.find(i => i[0] === b.dataset.cy), p = Math.round(c[3] * dc); if (S.zeals >= p) { S.zeals -= p; S.cyber[c[0]] = 1; syncHud(); shopUI(); toast(c[1] + ' INSTALLED'); save(); } });
+  const sellK = k => { const n = S.inv[k], g = n * price(k); S.zeals += g; S.inv[k] = 0; S.mk[k] = Math.max(.4, (S.mk[k] || 1) - .02 * n); return g; };
+  $$('[data-s]').forEach(b => b.onclick = () => { toast('+' + sellK(b.dataset.s) + ' Z'); syncHud(); shopUI(); });
+  $('#sell').onclick = () => { toast('SOLD FOR ' + keys.reduce((a, k) => a + sellK(k), 0) + ' Z'); syncHud(); shopUI(); };
+}
+
+/* ---------- risk events with choices ---------- */
+const fightWin = () => clamp(.35 + .12 * S.up.weapon + .03 * S.up.armor + SHIPS[S.type].cmb, .1, .85);
+routeEvent = function () {
+  const ev = Math.random() * 5 | 0, thr = Math.round(thrustP() * 100);
+  if (ev === 0) choice('ASTEROID FIELD AHEAD!', [['FLY THROUGH', () => popup(Math.random() < thrustP() ? 'YOU THREAD THE ROCKS WITHOUT A SCRATCH.' : `HULL DAMAGE! REPAIRS COST ${loseZ(.05)} Z.`)],
+    ['GO AROUND (-3 FUEL)', () => { S.fuel = Math.max(0, S.fuel - 3); syncHud(); popup('YOU TAKE THE LONG WAY AROUND.'); }],
+    ['MINE THE FIELD', () => { const n = Math.min(8 + Math.random() * 10 | 0, Math.max(0, cargoCap() - cargoUsed())); S.inv.lunarrite = (S.inv.lunarrite || 0) + n; syncHud(); popup(n ? `RISKY, BUT YOU GRAB ${n} LUNARRITE.` : 'CARGO FULL. NOTHING TAKEN.'); }]]);
+  else if (ev === 1) choice('PIRATE SCAN! A PATROL PINGS YOUR CARGO.', [[`AVOID (${thr}%)`, () => popup(Math.random() < thrustP() ? 'YOU SLIP AWAY BEFORE THEY LOCK ON.' : `THEY CAUGHT YOU: -${loseZ(.06)} Z.`)],
+    ['BRIBE', () => popup(`THEY TAKE ${loseZ(.04)} Z AND LOOK THE OTHER WAY.`)],
+    ['FIGHT', () => { if (Math.random() < fightWin()) { const g = 300 + Math.random() * 900 | 0; S.zeals += g; syncHud(); popup(`YOU WIN! +${g} Z FROM THE WRECKS.`); } else popup(`YOU LOSE THE FIGHT: -${loseZ(.09)} Z.`); }]]);
+  else if (ev === 2) choice('SOLAR STORM INBOUND!', [['SHIELD UP', () => popup(Math.random() < .35 + .12 * S.up.armor ? 'YOUR DEFENSES ABSORB THE BLAST.' : `SCORCHED SYSTEMS COST ${loseZ(.04)} Z.`)], ['DIVERT (-4 FUEL)', () => { S.fuel = Math.max(0, S.fuel - 4); syncHud(); popup('YOU BURN AROUND THE STORM.'); }]]);
+  else if (ev === 3) choice('DISTRESS SIGNAL FROM A DRIFTING SHIP.', [['HELP (-4 FUEL)', () => { S.fuel = Math.max(0, S.fuel - 4); S.rep++; const g = 200 + Math.random() * 400 | 0; S.zeals += g; syncHud(); popup(`THEY THANK YOU WITH ${g} Z. STANDING +1.`); }], ['IGNORE', () => {}],
+    ['INVESTIGATE', () => { if (Math.random() < .5) { const n = Math.min(10 + Math.random() * 10 | 0, Math.max(0, cargoCap() - cargoUsed())); S.inv.lunarrite = (S.inv.lunarrite || 0) + n; syncHud(); popup(`SALVAGE! ${n} LUNARRITE IN THE HOLD.`); } else hostile('IT WAS A TRAP! RAIDERS UNCLOAK.', .08); }]]);
+  else { const g = 100 + Math.random() * 300 | 0; S.zeals += g; syncHud(); popup(`A DRIFTING CARGO POD! YOU RECOVER ${g} Z.`); }
+};
+const _arr5 = arrive; arrive = function (d) { const m = S.travel && S.travel.mode; _arr5(d); if (m === 'safe' && Math.random() < .1) routeEvent(); };
+
+/* ---------- travel screen with progress + destination ---------- */
+function renderTravel(el) { const n = (PLACES[S.travel.to] || {}).name || ''; el.innerHTML = `<canvas id="tc" width="920" height="560" style="position:absolute;inset:0"></canvas><div class="tbar"><div class="tn">DESTINATION: ${n}</div><div id="tt"></div><div class="bar tp"><div id="tpb"></div></div></div>`; }
+function tickTravel(dt) {
+  const tr = S.travel; tr.t += dt; const warp = tr.t < T.warpSeconds, rem = Math.max(0, tr.dur - Math.max(0, tr.t - T.warpSeconds)), tt = $('#tt'); if (!tt) return;
+  tt.textContent = warp ? 'ENGAGING DRIVES...' : `ETA ${fmt(rem)}`; $('#tpb').style.width = Math.min(100, tr.t / (T.warpSeconds + tr.dur) * 100) + '%';
+  const key = S.type + JSON.stringify(S.paint); if (!S._spr || S._spr.k !== key) S._spr = { k: key, c: shipSprite(S.type, S.paint) };
+  const c = $('#tc').getContext('2d'), sc = 1.5; c.imageSmoothingEnabled = false; c.fillStyle = '#02030a'; c.fillRect(0, 0, 920, 560);
+  for (let i = 0; i < 6; i++) { c.fillStyle = 'rgba(90,60,160,.14)'; const nx = ((i * 211 - tr.t * 20) % 1100 + 1100) % 1100 - 100; c.fillRect(Math.round(nx / 8) * 8, 60 + i * 80, 160 + i * 20, 48); }
+  for (const s of stars) { s.x -= s.s * (warp ? 1100 : 220) * dt; if (s.x < -80) { s.x = 940; s.y = Math.random() * 560; } const z = s.s < .6 ? 4 : s.s < 1 ? 8 : 12;
+    c.fillStyle = s.s < .6 ? '#667' : s.s < 1 ? '#bbb' : '#fff'; c.fillRect(Math.round(s.x / 4) * 4, Math.round(s.y / 4) * 4, warp ? z * 4 : z, 4); }
+  const bob = Math.round(Math.sin(tr.t * 3) * 2) * 3, sx = 120, sy = 130 + bob, glow = S.paint.glow || '#8fd3ff', pal = ['#fff', '#e8f7ff', glow, '#6fb3ff', '#ffb36b', '#ff6a2a', '#601810'];
+  shipEngY(S.type).forEach(ey => { const fy = sy + ey * sc, len = 9 + (Math.random() * 6 | 0) + (warp ? 6 : 0);
+    for (let k = 0; k < len; k++) { c.fillStyle = pal[Math.min(6, k >> 1)]; const h = k < 4 ? 10 : k < 8 ? 7 : 4; c.fillRect(sx - (k + 1) * 6, fy - h / 2, 6, h); }
+    tr.sp.push({ x: sx, y: fy, vx: -(250 + Math.random() * 300), vy: (Math.random() - .5) * 60, l: 1 }); });
+  tr.sp = tr.sp.filter(p => (p.l -= dt * 1.6) > 0); for (const p of tr.sp) { p.x += p.vx * dt; p.y += p.vy * dt; c.fillStyle = p.l > .5 ? '#ffb347' : '#ff5a2a'; c.fillRect(Math.round(p.x / 4) * 4, Math.round(p.y / 4) * 4, 4, 4); }
+  c.drawImage(S._spr.c, sx, sy, 400 * sc, 200 * sc);
+  if (tr.t >= T.warpSeconds + tr.dur) arrive(tr.to);
+}
+
+/* ---------- map: zoom, fuel costs ---------- */
+const _rm5 = renderMap;
+renderMap = function (el) { _rm5(el); $('.actions').insertAdjacentHTML('beforeend', B('zi', 'ZOOM +') + B('zo', 'ZOOM -')); $('#zi').onclick = () => M.z = clamp((M.z || 1) * 1.25, .25, 3); $('#zo').onclick = () => M.z = clamp((M.z || 1) * .8, .25, 3); };
+function panel() {
+  const el = $('#mp'); if (!el) return; const p = M.sel; if (!p) { el.innerHTML = '<div class="box sm">CLICK A PLANET. SCROLL OR USE ZOOM TO ZOOM.</div>'; return; }
+  const here = S.loc === p.id, sy = sysOf(p.id), same = sysOf(S.loc) === sy, d = Math.round(baseDur(S.loc, p.id) * travelMult()), tp = p.type ? TYPES.find(t => t[0] === p.type)[1] : (PLACES[p.id] || {}).sub || '';
+  el.innerHTML = `<div class="box"><b>${p.name}</b><br><span class="sm">${sy.name}<br>${tp}<br>${here ? 'YOU ARE HERE' : same ? `SHORT HOP: ${d} S - FUEL ${tripFuel(p.id)}` : `SAFE ${Math.round(d * 1.6)} S / FUEL ${tripFuel(p.id, 'safe')}<br>SHORT ${d} S / FUEL ${tripFuel(p.id)} (RISKY)`}</span></div>` +
+    (here ? B('pgo', 'LAND') : same ? B('pgo', 'TRAVEL') : B('pgs', 'SAFE ROUTE') + B('pgr', 'SHORT ROUTE - RISKY'));
+  const on = (id, f) => { const b = $('#' + id); if (b) b.onclick = f; };
+  on('pgo', () => here ? (S.view = 'planet', render()) : startTravel(p.id)); on('pgs', () => startTravel(p.id, 'safe')); on('pgr', () => startTravel(p.id, 'short'));
+}
+function drawMap() {
+  const c = $('#mc'); if (!c) return; const x = c.getContext('2d'), t = performance.now() / 1000, z = M.z || 1;
+  x.fillStyle = '#000'; x.fillRect(0, 0, 920, 560); x.fillStyle = '#444'; for (let i = 0; i < 70; i++) x.fillRect((i * 137) % 920, (i * 71) % 560, 2, 2);
+  const a = proj(SYSTEMS[0].x, SYSTEMS[0].y), b = proj(SYSTEMS[1].x, SYSTEMS[1].y); x.strokeStyle = '#444'; x.setLineDash([6, 8]); x.beginPath(); x.moveTo(a.x, a.y); x.lineTo(b.x, b.y); x.stroke(); x.setLineDash([]);
+  x.font = '600 13px Ubuntu, sans-serif'; x.textAlign = 'center';
+  for (const s of SYSTEMS) { const c0 = proj(s.x, s.y); let mo = 0;
+    for (const p of s.planets) { mo = Math.max(mo, p.orbit); x.strokeStyle = '#999'; x.lineWidth = 2; x.beginPath(); x.arc(c0.x, c0.y, p.orbit * z, 0, 6.283); x.stroke(); }
+    x.fillStyle = s.col || '#f5a623'; x.beginPath(); x.arc(c0.x, c0.y, s.sun * z, 0, 6.283); x.fill(); x.fillStyle = '#fff'; x.fillText(s.name, c0.x, c0.y + mo * z + 26); }
+  for (const { s, p } of mapPlanets()) { const q = planetPos(s, p, t), r = p.r * Math.sqrt(z);
+    x.fillStyle = p.color; x.beginPath(); x.arc(q.x, q.y, r, 0, 6.283); x.fill(); if (M.sel === p) { x.strokeStyle = '#fff'; x.strokeRect(q.x - r - 6, q.y - r - 6, r * 2 + 12, r * 2 + 12); }
+    x.fillStyle = '#fff'; x.fillText(p.name, q.x, q.y + r + 16); if (S.loc === p.id) x.fillText('YOU', q.x, q.y - r - 10); }
+}
+
+/* ---------- mining with sparkles ---------- */
+const SPK = []; function spark(x, y, n) { for (let i = 0; i < (n || 6); i++) SPK.push({ x, y, vx: (Math.random() - .5) * 160, vy: -30 - Math.random() * 90, l: 1 }); }
+function drawFx(dt) { const c = $('#fx2'); if (!c) return; if (!SPK.length && !c._e) return; const x = c.getContext('2d'); x.clearRect(0, 0, 920, 560); c._e = SPK.length > 0;
+  for (let i = SPK.length - 1; i >= 0; i--) { const p = SPK[i]; p.l -= dt * 1.8; if (p.l <= 0) { SPK.splice(i, 1); continue; } p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 180 * dt; x.fillStyle = p.l > .5 ? '#fff' : '#bbb'; x.fillRect(Math.round(p.x / 4) * 4, Math.round(p.y / 4) * 4, 4, 4); } }
+function mineD(dt) {
+  const p = findP(S.loc); if (!p || !p.mat) return;
+  if (cargoUsed() >= cargoCap()) { S.mining = false; const b = $('#dm'); if (b) b.textContent = 'START MINING'; toast('CARGO FULL'); return; }
+  S.fr += 1.1 * mineMult() * (p.type === 'belt' ? .8 : p.type === 'anomaly' ? .6 : 1) * dt; let got = 0;
+  while (S.fr >= 1 && cargoUsed() < cargoCap()) { S.fr -= 1; S.inv[p.mat] = (S.inv[p.mat] || 0) + 1; S.stats.mined++; got++; }
+  if (got) { spark(460, 250, 3); blip(1); }
+  const cg = $('#cg'); if (cg) { cg.textContent = `${cargoUsed()} / ${cargoCap()} CARGO (${S.inv[p.mat] || 0} ${MATS[p.mat].n})`; const b = $('#bar'); b.style.width = cargoUsed() / cargoCap() * 100 + '%'; b.parentElement.classList.add('pulse'); }
+}
+
+/* ---------- audio: always on, click blips, per-ship engine tone, volume ---------- */
+muted = false;
+function setMood(m) { if (!AC || m === mood) return; mood = m; const t = AC.currentTime, f = { calm: [110, 165, .04], tense: [73, 77, .06], travel: [60 + S.type * 9, 90 + S.type * 13, .05] }[m];
+  O1.frequency.linearRampToValueAtTime(f[0], t + 2); O2.frequency.linearRampToValueAtTime(f[1], t + 2); GN.gain.linearRampToValueAtTime(f[2] * S.vol, t + 2); }
+function ching() { if (!AC) return; [880, 1320, 1760].forEach((f, i) => { const o = AC.createOscillator(), g = AC.createGain(); o.frequency.value = f; o.type = 'square'; o.connect(g); g.connect(AC.destination);
+  const t = AC.currentTime + i * .07; g.gain.setValueAtTime(.05 * S.vol, t); g.gain.exponentialRampToValueAtTime(.001, t + .25); o.start(t); o.stop(t + .26); }); }
+let _bl = 0; function blip(q) { if (!AC || performance.now() - _bl < 60) return; _bl = performance.now(); const o = AC.createOscillator(), g = AC.createGain(); o.type = 'triangle'; o.frequency.value = q ? 660 : 440; o.connect(g); g.connect(AC.destination);
+  const t = AC.currentTime; g.gain.setValueAtTime(.04 * S.vol, t); g.gain.exponentialRampToValueAtTime(.001, t + .08); o.start(t); o.stop(t + .09); }
+addEventListener('pointerdown', e => { audio(); if (e.target.closest && e.target.closest('.btn,.card')) blip(); });
+
+/* ---------- menu: contracts, cargo, ship, stats, settings ---------- */
+let menuOpen = false;
+function toggleMenu() { const m = $('#menu'); if (S.view === 'name') return; menuOpen = !menuOpen; m.hidden = !menuOpen; if (menuOpen) menuUI(); }
+function menuUI() {
+  const m = $('#menu'), st = S.stats, inv = Object.keys(S.inv).filter(k => S.inv[k] > 0 && MATS[k]);
+  const ACH = [['FIRST CONTRACT', st.jobs >= 1], ['10 CONTRACTS', st.jobs >= 10], ['100K ZEALS EARNED', st.earned >= 100000], ['EXPLORER: 3 SYSTEMS', S.dn >= 3], ['500 KLY TRAVELLED', st.dist >= 500], ['MINER: 500 ORE', st.mined >= 500]];
+  m.innerHTML = `<div class="mh"><b>MENU</b><button class="btn sec" id="mx">CLOSE</button></div><div class="mg">
+    <div><b>CONTRACTS</b>${S.act.map((j, i) => `<div class="ln sm"><span>${j.need} x ${MATS[j.mat].n} - ${fmt(j.left)}</span><button class="btn dng" data-mab="${i}">ABANDON</button></div>`).join('') || '<div class="sm">NONE ACTIVE</div>'}<div class="sm">STANDING: ${repName()} (${S.rep})</div></div>
+    <div><b>CARGO ${cargoUsed()}/${cargoCap()}</b>${inv.map(k => `<div class="ln sm"><span>${MATS[k].n} x${S.inv[k]}</span><button class="btn dng" data-dr="${k}">DROP</button></div>`).join('') || '<div class="sm">EMPTY</div>'}</div>
+    <div><b>SHIP: ${SHIPS[S.type].n}</b><div class="sm">${perkText(S.type)}<br>UPGRADES: ${UPG.map(u => u[1].slice(0, 3) + ' ' + S.up[u[0]]).join(' | ')}<br>FUEL ${Math.ceil(S.fuel)}/${fuelMax()}</div></div>
+    <div><b>STATS</b><div class="sm">CONTRACTS ${st.jobs} | ORE ${st.mined} | ${st.dist} KLY | SYSTEMS ${S.dn}</div>${ACH.map(a => `<div class="sm">${a[1] ? '&#10003;' : '&#9633;'} ${a[0]}</div>`).join('')}</div>
+    <div><b>SETTINGS</b><div class="ln sm"><span>VOLUME</span><input type="range" id="vol" min="0" max="100" value="${Math.round(S.vol * 100)}"></div><div class="ln sm"><span>REDUCED MOTION</span><input type="checkbox" id="rm" ${S.rm ? 'checked' : ''}></div><button class="btn sec" id="fs">FULLSCREEN</button></div></div>
+    <div class="row"><button class="btn dng" id="ng">NEW GAME</button></div><div class="sm" style="text-align:center">CELESTIA v1.3 - ESC: MENU - M: MAP</div>`;
+  $('#mx').onclick = toggleMenu;
+  $$('[data-mab]').forEach(b => b.onclick = () => choice('ABANDON THIS CONTRACT? STANDING -1.', [['ABANDON', () => { S.act.splice(+b.dataset.mab, 1); S.rep = Math.max(0, S.rep - 1); syncHud(); menuUI(); }], ['KEEP', () => {}]]));
+  $$('[data-dr]').forEach(b => b.onclick = () => choice(`DROP ALL ${S.inv[b.dataset.dr]} ${MATS[b.dataset.dr].n}? IT WILL BE LOST.`, [['DROP', () => { S.inv[b.dataset.dr] = 0; syncHud(); menuUI(); }], ['KEEP', () => {}]]));
+  $('#vol').oninput = e => { S.vol = e.target.value / 100; if (AC) GN.gain.value = .045 * S.vol; };
+  $('#rm').onchange = e => { S.rm = e.target.checked; $('#stage').classList.toggle('rm', S.rm); };
+  $('#fs').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); };
+  $('#ng').onclick = () => choice('START A NEW GAME? YOUR SAVED PROGRESS WILL BE ERASED.', [['ERASE & RESTART', () => { resetGame(); }], ['CANCEL', () => {}]]);
+}
+addEventListener('keydown', e => { if (e.key === 'Escape') toggleMenu(); if ((e.key === 'm' || e.key === 'M') && S.mapUnlocked && ['planet', 'map'].includes(S.view) && !e.target.matches('input')) { S.view = S.view === 'map' ? 'planet' : 'map'; render(); } });
+
+/* ---------- ambient planet animation, transitions, render hook ---------- */
+function drawAmb(t) {
+  const c = $('#amb'); if (!c) return; const x = c.getContext('2d'); x.clearRect(0, 0, 460, 280);
+  for (let i = 0; i < 40; i++) { x.fillStyle = `rgba(255,255,255,${(.3 + .7 * Math.abs(Math.sin(t * .8 + i * 1.7))) * .6})`; x.fillRect((i * 83) % 460, (i * 47) % 280, 1, 1); }
+  const key = S.type + JSON.stringify(S.paint); if (!S._amb || S._amb.k !== key) S._amb = { k: key, c: shipSprite(S.type, S.paint) };
+  const p = ((t * 16) % 900) - 220, y = 40 + Math.sin(t) * 4; x.drawImage(S._amb.c, p, y, 110, 55); x.fillStyle = 'rgba(143,211,255,.55)'; x.fillRect(p - 12, y + 26, 12, 2);
+}
+let _lk = ''; const _rd = render;
+render = function () { const k = S.view + '|' + S.loc + '|' + !!S.inside; if (k !== _lk) { _lk = k; const w = $('#wipe'); if (w) { w.classList.remove('go'); void w.offsetWidth; w.classList.add('go'); } }
+  _rd(); if (S.view === 'planet' && !S.inside && !S.rm) $('#screen').insertAdjacentHTML('beforeend', '<canvas id="amb" class="amb" width="460" height="280"></canvas>');
+  const mb = $('#mbtn'); if (mb) mb.style.display = S.view === 'name' ? 'none' : ''; };
+function checkPlay() { playable = true; $('#guard').hidden = true; const s = Math.min(innerWidth / 920, innerHeight / 560); $('#stage').style.transform = `translate(-50%,-50%) scale(${s})`; }
+
+/* ---------- main simulation: also runs while the tab is in the background ---------- */
+let _sc2 = 0;
+function produce(dt) {
+  S.sv += dt; if (S.sv > 4) { S.sv = 0; save(); }
+  S.mkT += dt; if (S.mkT > 15) { S.mkT = 0; driftMarket(); if (S.view === 'planet' && S.loc === 'bazaar' && S.inside) shopUI(); }
+  if (S.step >= 11) { S.boardT -= dt; if (!S.board.length || S.boardT <= 0) genBoard(); }
+  if (S.cd > 0) S.cd -= dt;
+  for (let i = S.act.length - 1; i >= 0; i--) { S.act[i].left -= dt; if (S.act[i].left <= 0) { const j = S.act.splice(i, 1)[0]; S.rep = Math.max(0, S.rep - 1); syncHud(); popup(`CONTRACT EXPIRED: ${j.need} x ${MATS[j.mat].n}. YOUR STANDING DROPS.`); if (S.view === 'hut') jobsUI(); } }
+  if (S.zeals - lastZ >= 200) ching(); lastZ = S.zeals;
+  _sc2 += dt; if (_sc2 >= 1) { _sc2 = 0; syncHud(); $$('[data-lt]').forEach(e => { const j = S.act[+e.dataset.lt]; if (j) e.textContent = fmt(j.left); }); const bt = $('.jb .sm'); const p = isD(S.loc) && findP(S.loc);
+    setMood(S.view === 'travel' ? 'travel' : p && p.type === 'mobs' ? 'tense' : 'calm'); }
+}
+function sim(dt) {
+  if (S.view === 'travel' && S.travel) tickTravel(dt);
+  else if (S.view === 'map') { if (!document.hidden) drawMap(); }
+  else if (S.view === 'planet') {
+    if (S.mining && S.loc === 'korr' && S.step < 11 && canMine()) { S.ore = Math.min(S.need, S.ore + T.mineRate * mineMult() * dt); updateOre(); if (S.ore >= S.need) finishMine(); }
+    else if (S.mining && (isD(S.loc) || (S.loc === 'korr' && S.step >= 11))) mineD(dt);
+    if (!document.hidden) drawAmb(performance.now() / 1000);
+  }
+  produce(dt);
+}
+function tick(now) { const dt = Math.min(300, (now - last) / 1000); last = now; sim(dt); drawFx(dt); requestAnimationFrame(tick); }
+
+/* ---------- start: auto-continue the last run ---------- */
+$('#stage').insertAdjacentHTML('beforeend', '<canvas id="fx2" width="920" height="560"></canvas><div id="wipe"></div><div id="menu" hidden></div><button class="btn sec" id="mbtn">MENU</button>');
+$('#mbtn').onclick = toggleMenu;
+checkPlay(); if (!(hasSave() && loadGame())) render(); shownZ = S.zeals; lastZ = S.zeals; last = performance.now();
+requestAnimationFrame(tick);
+setInterval(() => { if (document.hidden) { const n = performance.now(), dt = Math.min(300, (n - last) / 1000); last = n; sim(dt); } }, 500);
+document.addEventListener('visibilitychange', () => { if (document.hidden) save(); }); addEventListener('pagehide', () => save());
+
+</script>
+<script>
+/* Celestia 1.4: full reset, Light Speed Booster, secret ship, captain levels, keys & chests */
+(d => { for (const k in d) if (S[k] === undefined) S[k] = d[k]; })({ xp: 0, lvl: 1, bf: 0, bc: 0, bm: 0, bs: 0, pend: 0, god: 0, lsb: 0, keys: { common: 0, rare: 0, epic: 0, legend: 0 }, chests: { common: 0, rare: 0, epic: 0, legend: 0 } });
+
+/* ---------- reset: wipe the save for good and reload to the title ---------- */
+let _noSave = false;
+const _save0 = save; save = function () { if (_noSave) return; _save0(); };
+function resetGame() { _noSave = true; try { localStorage.removeItem(SAVE_KEY); } catch (e) {} location.reload(); }
+
+/* ---------- Bazaar: Light Speed Booster (20,000 Z, travel 10x faster) ---------- */
+const _shop7 = shopUI;
+shopUI = function () {
+  _shop7(); const sh = $('#sh'); if (!sh) return;
+  sh.insertAdjacentHTML('beforeend', `<b>PROPULSION</b><div class="ln"><span>LIGHT SPEED BOOSTER <span class="sm">TRAVEL 10x FASTER</span></span><button class="btn pri" id="lsb" ${S.lsb || S.zeals < 20000 ? 'disabled' : ''}>${S.lsb ? 'INSTALLED' : '20,000 Z'}</button></div>`);
+  $('#lsb').onclick = () => { if (S.zeals >= 20000 && !S.lsb) { S.zeals -= 20000; S.lsb = 1; syncHud(); shopUI(); toast('LIGHT SPEED BOOSTER INSTALLED!'); save(); } };
+};
+
+/* ---------- secret ship: name your ship TheDeathRazer45 ---------- */
+SPEC.push({ c: '#d4af37', a: '#8a6a12', p: [[8, 24], [24, 29], [120, 16], [196, 1.5]], w: [], eng: 5, tower: 26, tur: [44, 62, 80, 98, 116, 134, 152], win: 2, stripe: 1 });
+PERK.push([.2, 3, .5, .95, 5000, .5]); FUEL.push([9999, .1]); TAGS.push('SECRET');
+SHIPS.push({ n: 'THE DEATH RAZER', d: 'A gold Executer-class super dreadnought. Only buffs, no limits.', c: '#d4af37', trv: .2, mine: 3, rng: .5, thr: .95, cargo: 5000, cmb: .5 });
+
+/* ---------- captain level & XP ---------- */
+const xpNeed = l => 100 + 70 * (l - 1), TITLES = { 10: 'PILOT', 20: 'COMMANDER', 30: 'CAPTAIN', 40: 'ADMIRAL', 50: 'LEGEND' };
+const titleOf = () => { let t = 'ROOKIE'; for (const k in TITLES) if (S.lvl >= +k) t = TITLES[k]; return t; };
+let _lvBusy = false;
+function addXP(n) { S.xp += n; let up = 0; while (S.lvl < 50 && S.xp >= xpNeed(S.lvl)) { S.xp -= xpNeed(S.lvl); S.lvl++; up++; if (TITLES[S.lvl]) toast('TITLE UNLOCKED: ' + TITLES[S.lvl]); }
+  if (S.lvl >= 50) S.xp = Math.min(S.xp, xpNeed(49)); S.pend += up; if (up && !_lvBusy) levelUp(); }
+function levelUp() {
+  if (S.pend <= 0) { _lvBusy = false; return; } _lvBusy = true; const L = S.lvl - S.pend + 1; S.pend--;
+  choice(`<b>LEVEL UP! CAPTAIN LEVEL ${L}</b><br>PICK A PERMANENT BONUS:`, [['FUEL EFFICIENCY -2%', () => { S.bf++; levelUp(); }], ['CARGO +10', () => { S.bc++; levelUp(); }], ['MINING +3%', () => { S.bm++; levelUp(); }], ['SCAN RANGE +1%', () => { S.bs++; levelUp(); }]]);
+}
+const _hud7 = hud; hud = function () { return _hud7().replace('<span class="sm">', `<span class="sm" id="hlv">LV ${S.lvl} - `); };
+const _sync7 = syncHud; syncHud = function () { _sync7(); const e = $('#hlv'); if (e) { const t = `LV ${S.lvl} - ${SHIPS[S.type].n.split(' / ')[0]}`; if (e.textContent !== t) e.textContent = t; } };
+
+/* ---------- keys, chests & loot ---------- */
+const KT = ['common', 'rare', 'epic', 'legend'], KC = ['#9aa0a6', '#4da3ff', '#b07bff', '#ffb43a'];
+function dropLoot(src, tier) {
+  const w = src === 'wreck' ? [.4, .3, .12, .03] : src === 'mob' ? [.45, .15, .05, .01] : [.3, .08, .02, .005], got = [];
+  KT.forEach((k, i) => { if (Math.random() < w[i] * (1 + .1 * tier)) { S.keys[k]++; got.push(k.toUpperCase() + ' KEY'); } });
+  if (src === 'wreck' && Math.random() < .6) { const k = KT[Math.random() < .7 ? 0 : Math.random() < .7 ? 1 : 2]; S.chests[k]++; got.push(k.toUpperCase() + ' CHEST'); }
+  if (got.length) toast('FOUND: ' + got.join(', '));
+}
+const keyFor = i => { for (let q = i; q < 4; q++) if (S.keys[KT[q]] > 0) return q; return -1; };
+function openChest(k) {
+  const i = KT.indexOf(k), ki = keyFor(i); if (ki < 0 || S.chests[k] < 1) return; S.keys[KT[ki]]--; S.chests[k]--; const R = (a, b) => a + Math.floor(Math.random() * (b - a)); let t;
+  if (i === 0) { const r = Math.random(); if (r < .4) { const z = R(100, 400); S.zeals += z; t = `${z} ZEALS`; } else if (r < .7) { const f = R(8, 18); S.fuel = Math.min(fuelMax(), S.fuel + f); t = `${f} FUEL`; } else { const n = R(8, 20); S.inv.lunarrite = (S.inv.lunarrite || 0) + n; t = `${n} LUNARRITE`; } }
+  else if (i === 1) { const z = R(400, 1200), n = R(10, 20); S.zeals += z; S.inv.lunarrite = (S.inv.lunarrite || 0) + n; S.fuel = Math.min(fuelMax(), S.fuel + 20); t = `${z} ZEALS, ${n} LUNARRITE AND 20 FUEL`; }
+  else if (i === 2) { const z = R(1500, 4000); S.zeals += z; MATS.core = MATS.core || { n: 'ANCIENT CORE', base: 900 }; S.inv.core = (S.inv.core || 0) + 1; t = `${z} ZEALS AND AN ANCIENT CORE`; }
+  else { const open = Object.keys(S.up).filter(u => S.up[u] < 5), u = open.length ? rnd(open) : null; S.zeals += 6000; if (u) S.up[u]++; t = `6000 ZEALS${u ? ' AND A FREE ' + u.toUpperCase() + ' UPGRADE' : ''}`; }
+  addXP(25 * (i + 1)); syncHud(); popup(`<b style="color:${KC[i]}">${k.toUpperCase()} CHEST OPENED!</b><br>YOU GOT ${t}.`); menuUI();
+}
+const _mu7 = menuUI;
+menuUI = function () {
+  _mu7(); const g = $('.mg'); if (!g) return;
+  g.insertAdjacentHTML('beforeend', `<div><b>CAPTAIN LV ${S.lvl} - ${titleOf()}</b><div class="sm">XP ${Math.floor(S.xp)}/${xpNeed(S.lvl)}<br>BONUSES: FUEL -${2 * S.bf}% | CARGO +${10 * S.bc} | MINING +${3 * S.bm}% | SCAN +${S.bs}%</div></div>
+    <div><b>KEYS &amp; CHESTS</b>${KT.map((k, i) => `<div class="ln sm"><span style="color:${KC[i]}">${k.toUpperCase()}</span><span>KEYS ${S.keys[k]} | CHESTS ${S.chests[k]}</span><button class="btn" data-oc="${k}" ${S.chests[k] && keyFor(i) >= 0 ? '' : 'disabled'}>OPEN</button></div>`).join('')}<div class="sm">A CHEST NEEDS A KEY OF THE SAME OR HIGHER TIER.</div></div>`);
+  $$('[data-oc]').forEach(b => b.onclick = () => openChest(b.dataset.oc));
+};
+
+/* ---------- XP & loot hooks ---------- */
+const _hunt7 = hunt; hunt = function (p) { const z = S.zeals; _hunt7(p); if (S.zeals > z) { addXP(30 + p.lvl * 20); dropLoot('mob', p.lvl); } };
+const _salv7 = salvage; salvage = function (p) { _salv7(p); addXP(90); dropLoot('wreck', 3); };
+const _gen7 = genSystem; genSystem = function () { const r = _gen7(); addXP(60); return r; };
+const _del7 = deliver; deliver = function (i) { const j = S.act[i], n = S.act.length; _del7(i); if (j && S.act.length < n) { addXP(30 + (j.need / 2 | 0)); dropLoot('job', 1); } };
+const _mine7 = mineD; mineD = function (dt) { const m = S.stats.mined; _mine7(dt); if (S.stats.mined > m) addXP((S.stats.mined - m) * .25); };
+render(); if (S.pend > 0) setTimeout(levelUp, 800);
+
+</script>
+</body>
+</html>
